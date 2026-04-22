@@ -1,0 +1,101 @@
+<view class="container">
+  <view class="tab-header">
+    <view 
+      class="tab-item {{currentTab === 'created' ? 'active' : ''}}"
+      data-tab="created"
+      bindtap="switchTab">
+      我创建的
+    </view>
+    <view 
+      class="tab-item {{currentTab === 'joined' ? 'active' : ''}}"
+      data-tab="joined"
+      bindtap="switchTab">
+      我参加的
+    </view>
+  </view>
+
+  <view class="content">
+    <!-- 创建的活动 -->
+    <view wx:if="{{currentTab === 'created'}}" class="activity-section">
+      <view wx:if="{{loading}}" class="loading">
+        <text>加载中...</text>
+      </view>
+      
+      <view wx:if="{{!loading && myCreatedActivities.length === 0}}" class="empty-tip">
+        <text>还没有创建活动</text>
+        <button class="btn-create" bindtap="goToCreate">立即创建</button>
+      </view>
+      
+      <view wx:if="{{!loading && myCreatedActivities.length > 0}}" class="activity-list">
+        <view 
+          wx:for="{{myCreatedActivities}}" 
+          wx:key="_id"
+          class="activity-card"
+          data-id="{{item._id}}"
+          bindtap="goToActivity">
+          <view class="card-header">
+            <text class="activity-name">{{item.name}}</text>
+            <view class="status-badge status-{{item.status}}">
+              <text wx:if="{{item.status === 'registering'}}">报名中</text>
+              <text wx:elif="{{item.status === 'grouping'}}">分组中</text>
+              <text wx:elif="{{item.status === 'playing'}}">比赛中</text>
+              <text wx:elif="{{item.status === 'challenge'}}">挑战赛</text>
+              <text wx:elif="{{item.status === 'finished'}}">已结束</text>
+              <text wx:else>{{item.status}}</text>
+            </view>
+          </view>
+          <view class="card-info">
+            <text>📍 {{item.location}}</text>
+            <text>🕐 {{formatTime(item.time)}}</text>
+            <text>🏸 {{item.type === 'singles' ? '单打' : item.type === 'fixed-doubles' ? '双打固搭' : '双打'}}</text>
+          </view>
+          <view class="card-progress">
+            <progress 
+              percent="{{(item.current_players / item.max_players) * 100}}" 
+              stroke-width="6"
+              active
+              show-info
+              activeColor="#07c160"/>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 参加的活动 -->
+    <view wx:if="{{currentTab === 'joined'}}" class="activity-section">
+      <view wx:if="{{loading}}" class="loading">
+        <text>加载中...</text>
+      </view>
+      
+      <view wx:if="{{!loading && myJoinedActivities.length === 0}}" class="empty-tip">
+        <text>还没有参加任何活动</text>
+      </view>
+      
+      <view wx:if="{{!loading && myJoinedActivities.length > 0}}" class="activity-list">
+        <view 
+          wx:for="{{myJoinedActivities}}" 
+          wx:key="_id"
+          class="activity-card"
+          data-id="{{item._id}}"
+          bindtap="goToActivity">
+          <view class="card-header">
+            <text class="activity-name">{{item.name}}</text>
+            <view class="status-badge status-{{item.status}}">
+              <text wx:if="{{item.status === 'registering'}}">报名中</text>
+              <text wx:elif="{{item.status === 'grouping'}}">分组中</text>
+              <text wx:elif="{{item.status === 'playing'}}">比赛中</text>
+              <text wx:elif="{{item.status === 'challenge'}}">挑战赛</text>
+              <text wx:elif="{{item.status === 'finished'}}">已结束</text>
+              <text wx:else>{{item.status}}</text>
+            </view>
+          </view>
+          <view class="card-info">
+            <text>📍 {{item.location}}</text>
+            <text>🕐 {{formatTime(item.time)}}</text>
+            <text>🏸 {{item.type === 'singles' ? '单打' : item.type === 'fixed-doubles' ? '双打固搭' : '双打'}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

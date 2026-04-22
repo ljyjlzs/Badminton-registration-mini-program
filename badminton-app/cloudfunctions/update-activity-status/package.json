@@ -1,0 +1,9 @@
+{
+  "name": "update-activity-status",
+  "version": "1.0.0",
+  "description": "更新活动状态",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

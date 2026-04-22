@@ -1,0 +1,28 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/create-activity/create-activity",
+    "pages/activity-list/activity-list",
+    "pages/activity-detail/activity-detail",
+    "pages/grouping/grouping",
+    "pages/match-score/match-score",
+    "pages/ranking/ranking",
+    "pages/challenge/challenge"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#07c160",
+    "navigationBarTitleText": "羽毛球报名",
+    "navigationBarTextStyle": "white"
+  },
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于选择活动地点"
+    }
+  },
+  "requiredPrivateInfos": [
+    "chooseLocation"
+  ],
+  "sitemapLocation": "sitemap.json",
+  "style": "v2"
+}

@@ -1,0 +1,5 @@
+{
+  "usingComponents": {
+    "score-slider": "/components/score-slider/score-slider"
+  }
+}

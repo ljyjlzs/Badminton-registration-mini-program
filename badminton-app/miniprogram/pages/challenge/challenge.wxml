@@ -1,0 +1,72 @@
+<view class="container">
+  <view class="header">
+    <text class="title">挑战赛</text>
+    <text class="subtitle">淘汰者挑战晋级队</text>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading">
+    <text>加载中...</text>
+  </view>
+
+  <view wx:if="{{!loading}}" class="content">
+    <!-- 晋级队 -->
+    <view class="section">
+      <view class="section-title">晋级队伍</view>
+      <view class="team-list">
+        <view wx:for="{{qualifiedTeams}}" wx:key="_id" class="qualified-team">
+          <view class="team-name">{{item.name || '晋级队'}}</view>
+          <view class="team-members">
+            <text wx:for="{{item.members}}" wx:key="*this" wx:for-item="member">
+              {{member && member.nickname ? member.nickname : '未知'}}{{index < (item.members.length - 1) ? ' / ' : ''}}
+            </text>
+          </view>
+          <view class="team-score">积分: {{item.groupScore || 0}}</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 淘汰者 -->
+    <view class="section">
+      <view class="section-title">淘汰选手（自由组队挑战）</view>
+      <view wx:if="{{eliminatedPlayers.length === 0}}" class="empty-tip">
+        暂无淘汰选手
+      </view>
+      <view wx:else class="player-grid">
+        <view 
+          wx:for="{{eliminatedPlayers}}" 
+          wx:key="userId"
+          class="player-card"
+          data-playerid="{{item.userId}}"
+          bindtap="formChallengeTeam">
+          <!-- 暂时禁用头像，统一显示首字母 -->
+          <!-- <image wx:if="{{item.avatar}}" class="player-avatar" src="{{item.avatar}}" mode="aspectFill"></image> -->
+          <view class="avatar-text">{{item.nickname && item.nickname.length > 0 ? item.nickname[0] : '?'}}</view>
+          <text class="nickname">{{item.nickname || '未知'}}</text>
+           <text class="level">Lv.{{item.level || 5}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 挑战队 -->
+    <view wx:if="{{challengeMatch && qualifiedTeams && qualifiedTeams.length > 0}}" class="section challenge-ready">
+      <view class="section-title">挑战赛安排</view>
+      <view class="match-card">
+        <view class="match-teams">
+          <view class="team">
+            <text class="team-name">{{qualifiedTeams[0].name || '晋级队'}}</text>
+            <text class="team-members">晋级选手</text>
+          </view>
+          <text class="vs">VS</text>
+          <view class="team">
+            <text class="team-name">挑战队</text>
+            <text class="team-members">淘汰者</text>
+          </view>
+        </view>
+      </view>
+      
+      <button class="btn-start" bindtap="startChallenge">
+        开始挑战赛
+      </button>
+    </view>
+  </view>
+</view>

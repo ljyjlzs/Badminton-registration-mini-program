@@ -1,0 +1,44 @@
+<view class="score-slider {{disabled ? 'disabled' : ''}}">
+  <!-- 快捷分数选择 -->
+  <view class="quick-scores">
+    <view 
+      wx:for="{{quickScores}}" 
+      wx:key="*this"
+      class="quick-btn {{sliderValue === item ? 'active' : ''}} {{disabled ? 'disabled' : ''}}"
+      data-value="{{item}}"
+      bindtap="onQuickSelect">
+      {{item}}
+    </view>
+  </view>
+  
+  <!-- 滑动条 -->
+  <view class="slider-section">
+    <slider
+      min="0"
+      max="{{max}}"
+      step="1"
+      value="{{sliderValue}}"
+      disabled="{{disabled}}"
+      activeColor="#07c160"
+      backgroundColor="#e0e0e0"
+      block-size="24"
+      bindchange="onSliderChange"/>
+    
+    <view class="score-display">
+      <input 
+        type="number"
+        class="score-input {{disabled ? 'disabled' : ''}}"
+        value="{{sliderValue}}"
+        disabled="{{disabled}}"
+        bindinput="onInput"/>
+      <text class="score-label">分</text>
+    </view>
+  </view>
+  
+  <!-- 分数说明 -->
+  <view class="score-hint">
+    <text wx:if="{{sliderValue === 21}}" class="hint-win">完美21分！</text>
+    <text wx:elif="{{sliderValue > 15}}" class="hint-good">领先优势！</text>
+    <text wx:else class="hint-normal">加油！</text>
+  </view>
+</view>

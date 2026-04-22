@@ -1,0 +1,327 @@
+/* 活动列表页面样式 */
+
+.container {
+  min-height: 100vh;
+  background-color: var(--bg-gray);
+}
+
+/* ============ Tab 切换 ============ */
+.tab-header {
+  display: flex;
+  background-color: var(--bg-white);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1rpx solid var(--border-light);
+}
+
+.tab-item {
+  flex: 1;
+  height: 96rpx;
+  line-height: 96rpx;
+  text-align: center;
+  font-size: 30rpx;
+  font-weight: 500;
+  color: var(--text-secondary);
+  position: relative;
+  transition: all 0.25s ease;
+}
+
+.tab-item.active {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 48rpx;
+  height: 6rpx;
+  background: var(--primary-gradient);
+  border-radius: 3rpx;
+}
+
+.tab-item:active {
+  background-color: var(--bg-light);
+}
+
+/* ============ 内容区域 ============ */
+.content {
+  padding: var(--spacing-md);
+}
+
+/* ============ 加载状态 ============ */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl) 0;
+  color: var(--text-tertiary);
+  font-size: 28rpx;
+}
+
+.loading-spinner {
+  width: 48rpx;
+  height: 48rpx;
+  border: 4rpx solid var(--border-color);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-right: 16rpx;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ============ 空状态 ============ */
+.empty-tip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 160rpx var(--spacing-lg);
+  color: var(--text-tertiary);
+  font-size: 28rpx;
+}
+
+.empty-tip .empty-icon {
+  font-size: 120rpx;
+  margin-bottom: var(--spacing-md);
+  opacity: 0.4;
+}
+
+.empty-tip .empty-text {
+  color: var(--text-secondary);
+  font-size: 32rpx;
+  font-weight: 500;
+  margin-bottom: var(--spacing-xs);
+}
+
+.empty-tip .empty-desc {
+  color: var(--text-tertiary);
+  font-size: 26rpx;
+  margin-bottom: var(--spacing-lg);
+}
+
+.btn-create {
+  background: var(--primary-gradient);
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 500;
+  padding: 22rpx 56rpx;
+  border-radius: var(--radius-lg);
+  border: none;
+  box-shadow: 0 4rpx 16rpx rgba(0, 176, 126, 0.3);
+  transition: all 0.3s ease;
+}
+
+.btn-create:active {
+  transform: scale(0.96);
+  opacity: 0.9;
+}
+
+/* ============ 活动列表 ============ */
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+/* ============ 活动卡片 ============ */
+.activity-card {
+  background: var(--bg-white);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  box-shadow: var(--shadow-sm);
+  border: 1rpx solid var(--border-light);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.activity-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6rpx;
+  background: var(--primary-gradient);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.activity-card:active {
+  transform: scale(0.99);
+  box-shadow: var(--shadow-md);
+}
+
+.activity-card:active::before {
+  opacity: 1;
+}
+
+/* 卡片头部 */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+.activity-name {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+  margin-right: var(--spacing-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 状态徽章 - 使用 app.wxss 统一样式 */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 8rpx 20rpx;
+  border-radius: var(--radius-full);
+  font-size: 24rpx;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.status-registering {
+  background: linear-gradient(135deg, #e8f8f3 0%, #d4efdf 100%);
+  color: #00a06b;
+  border: 1rpx solid #b8e0c8;
+}
+
+.status-grouping {
+  background: linear-gradient(135deg, #fff8e6 0%, #ffecb3 100%);
+  color: #f57c00;
+  border: 1rpx solid #ffe0b2;
+}
+
+.status-playing {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  color: #1976d2;
+  border: 1rpx solid #90caf9;
+}
+
+.status-challenge {
+  background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%);
+  color: #e91e63;
+  border: 1rpx solid #f48fb1;
+}
+
+.status-finished {
+  background: linear-gradient(135deg, #f5f5f5 0%, #eeeeee 100%);
+  color: #9e9e9e;
+  border: 1rpx solid #e0e0e0;
+}
+
+/* 卡片信息 */
+.card-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.card-info .info-item {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 10rpx 18rpx;
+  background: var(--bg-gray);
+  border-radius: var(--radius-sm);
+  font-size: 26rpx;
+  color: var(--text-secondary);
+}
+
+.card-info .info-icon {
+  font-size: 28rpx;
+  color: var(--text-tertiary);
+}
+
+/* 进度条区域 */
+.card-progress {
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1rpx solid var(--border-light);
+}
+
+.progress-bar {
+  height: 12rpx;
+  background: var(--bg-gray);
+  border-radius: 6rpx;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--primary-gradient);
+  border-radius: 6rpx;
+  transition: width 0.4s ease;
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 24rpx;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4));
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12rpx;
+}
+
+.progress-text {
+  font-size: 24rpx;
+  color: var(--text-tertiary);
+}
+
+.progress-count {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  font-size: 26rpx;
+}
+
+.progress-current {
+  color: var(--primary-color);
+  font-weight: 700;
+}
+
+.progress-max {
+  color: var(--text-tertiary);
+}
+
+/* ============ 动画 ============ */
+.slide-up {
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

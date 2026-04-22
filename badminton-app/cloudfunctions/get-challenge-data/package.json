@@ -1,0 +1,9 @@
+{
+  "name": "get-challenge-data",
+  "version": "1.0.0",
+  "description": "获取挑战赛数据",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

@@ -1,0 +1,198 @@
+<view class="container">
+  <!-- 未登录状态 -->
+  <view wx:if="{{!isLoggedIn && !loading}}" class="login-section">
+    <view class="login-bg">
+      <view class="bg-ball bg-ball-1">🏸</view>
+      <view class="bg-ball bg-ball-2">🏸</view>
+      <view class="bg-ball bg-ball-3">🏸</view>
+      <view class="bg-net">🎾</view>
+    </view>
+    <view class="login-content">
+      <view class="login-icon">
+        <text class="icon-badminton">🏸</text>
+      </view>
+      <view class="login-title">羽毛球报名小程序</view>
+      <view class="login-desc">一键报名、智能分组、实时排名</view>
+      <button 
+        class="btn-login" 
+        open-type="getPhoneNumber" 
+        bindgetphonenumber="onGetUserInfo"
+        wx:if="{{false}}">
+        微信授权登录
+      </button>
+      <button 
+        class="btn-login"
+        open-type="getUserInfo"
+        bindgetuserinfo="onGetUserInfo">
+        微信授权登录
+      </button>
+    </view>
+  </view>
+
+  <!-- 加载中 -->
+  <view wx:if="{{loading}}" class="loading-section">
+    <view class="loading-spinner"></view>
+    <text>加载中...</text>
+  </view>
+
+  <!-- 已登录状态 -->
+  <view wx:if="{{isLoggedIn && !loading}}" class="main-section">
+    <!-- 用户信息 -->
+    <view class="user-card">
+      <view class="avatar-wrap">
+        <button 
+          class="avatar-btn" 
+          open-type="chooseAvatar" 
+          bindchooseavatar="onChooseAvatar">
+          <image 
+            wx:if="{{userInfo.avatar}}" 
+            class="user-avatar" 
+            src="{{userInfo.avatar}}" 
+            mode="aspectFill"></image>
+          <view wx:else class="user-avatar avatar-placeholder">
+            <text>{{userInfo && (userInfo.nickname || userInfo.name) ? (userInfo.nickname[0] || userInfo.name[0]) : '?'}}</text>
+          </view>
+        </button>
+      </view>
+      <view class="user-info">
+        <text class="nickname" bindtap="onEditNickname">{{userInfo && userInfo.nickname ? userInfo.nickname : '未设置'}}</text>
+      </view>
+    </view>
+
+    <!-- 快速入口 -->
+    <view class="quick-actions">
+      <view class="action-item" bindtap="goToCreateActivity">
+        <view class="action-icon">+</view>
+        <text class="action-text">创建活动</text>
+      </view>
+      <view class="action-item" bindtap="goToActivityList">
+        <view class="action-icon">🔍</view>
+        <text class="action-text">查找活动</text>
+      </view>
+    </view>
+
+    <!-- 我创建的活动 -->
+    <view class="section">
+      <view class="section-header">
+        <text class="section-title">我创建的活动</text>
+        <text class="section-more" bindtap="goToActivityList">查看更多</text>
+      </view>
+      
+      <view wx:if="{{myActivities.length === 0}}" class="empty-tip">
+        还没有创建活动，<text class="link" bindtap="goToCreateActivity">立即创建</text>
+      </view>
+      
+      <view wx:else class="activity-list">
+        <view 
+          wx:for="{{myActivities}}" 
+          wx:key="_id"
+          class="activity-card"
+          bindtap="goToActivityDetail"
+          data-id="{{item._id}}">
+          <view class="activity-name">{{item.name}}</view>
+          <view class="activity-info">
+            <text>{{item.location}}</text>
+            <text>{{item.current_players || 0}}/{{item.max_players}}人</text>
+          </view>
+          <view class="activity-status status-{{item.status}}">
+            <text wx:if="{{item.status === 'registering'}}">报名中</text>
+            <text wx:elif="{{item.status === 'grouping'}}">分组中</text>
+            <text wx:elif="{{item.status === 'playing'}}">比赛中</text>
+            <text wx:elif="{{item.status === 'challenge'}}">挑战赛</text>
+            <text wx:elif="{{item.status === 'finished'}}">已结束</text>
+            <text wx:else>{{item.status}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 可参加的活动 -->
+    <view class="section">
+      <view class="section-header">
+        <text class="section-title">可参加的活动</text>
+      </view>
+      
+      <view wx:if="{{joinableActivities.length === 0}}" class="empty-tip">
+        暂无可参加的活动
+      </view>
+      
+      <view wx:else class="activity-list">
+        <view 
+          wx:for="{{joinableActivities}}" 
+          wx:key="_id"
+          class="activity-card"
+          bindtap="goToActivityDetail"
+          data-id="{{item._id}}">
+          <view class="activity-name">{{item.name}}</view>
+          <view class="activity-info">
+            <text>{{item.location}}</text>
+            <text>{{item.current_players || 0}}/{{item.max_players}}人</text>
+          </view>
+          <view class="activity-progress">
+            <progress 
+              percent="{{(item.current_players / item.max_players) * 100}}" 
+              stroke-width="8"
+              active
+              show-info
+              activeColor="#07c160"/>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 不能参加的活动（正在进行和已结束） -->
+    <view class="section">
+      <view class="section-header">
+        <text class="section-title">不能参加的比赛</text>
+      </view>
+      
+      <view wx:if="{{unavailableActivities.length === 0}}" class="empty-tip">
+        暂无进行中的比赛
+      </view>
+      
+      <view wx:else class="activity-list">
+        <view 
+          wx:for="{{unavailableActivities}}" 
+          wx:key="_id"
+          class="activity-card disabled"
+          bindtap="goToActivityDetail"
+          data-id="{{item._id}}">
+          <view class="activity-name">{{item.name}}</view>
+          <view class="activity-info">
+            <text>{{item.location}}</text>
+            <text>{{item.current_players || 0}}/{{item.max_players}}人</text>
+          </view>
+          <view class="activity-status status-{{item.status}}">
+            <text wx:if="{{item.status === 'grouping'}}">分组中</text>
+            <text wx:elif="{{item.status === 'playing'}}">比赛中</text>
+            <text wx:elif="{{item.status === 'challenge'}}">挑战赛</text>
+            <text wx:elif="{{item.status === 'final'}}">决赛</text>
+            <text wx:elif="{{item.status === 'finished'}}">已结束</text>
+            <text wx:else>{{item.status}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 编辑弹窗 -->
+  <view wx:if="{{showEditDialog}}" class="picker-mask" bindtap="hideEditDialog">
+    <view class="picker-content" catchtap="stopPropagation">
+      <view class="picker-title">设置昵称</view>
+      
+      <view class="form-item">
+        <input 
+          class="form-input"
+          placeholder="请输入昵称"
+          maxlength="20"
+          value="{{editNickname}}"
+          bindinput="onEditNicknameInput"/>
+      </view>
+      
+      <view class="picker-actions">
+        <button class="btn-cancel" bindtap="hideEditDialog">取消</button>
+        <button class="btn-confirm" bindtap="confirmEdit">确认</button>
+      </view>
+    </view>
+  </view>
+</view>
