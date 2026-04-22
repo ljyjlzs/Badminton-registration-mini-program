@@ -101,17 +101,24 @@ exports.main = async (event, context) => {
     }
     
     const firstPlace = teamScores[0];
-    const firstPlaceMembers = new Set(firstPlace.members || []);
     
-    // 从末位往上扫描，找到第一个与第一名无共享成员的队伍
     let challenger = null;
-    for (let i = teamScores.length - 1; i >= 1; i--) {
-      const candidate = teamScores[i];
-      const candidateMembers = new Set(candidate.members || []);
-      const hasOverlap = [...firstPlaceMembers].some(m => candidateMembers.has(m));
-      if (!hasOverlap) {
-        challenger = candidate;
-        break;
+    const activityType = activity.type || 'doubles';
+    
+    if (activityType !== 'doubles') {
+      // 固搭双打 / 单打：队伍不会共享成员，直接取最后一名
+      challenger = teamScores[teamScores.length - 1];
+    } else {
+      // 轮换双打：同一个人可能出现在多个 team 中，从末位往上扫描
+      const firstPlaceMembers = new Set(firstPlace.members || []);
+      for (let i = teamScores.length - 1; i >= 1; i--) {
+        const candidate = teamScores[i];
+        const candidateMembers = new Set(candidate.members || []);
+        const hasOverlap = [...firstPlaceMembers].some(m => candidateMembers.has(m));
+        if (!hasOverlap) {
+          challenger = candidate;
+          break;
+        }
       }
     }
     
