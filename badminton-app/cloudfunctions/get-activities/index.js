@@ -13,12 +13,48 @@ const db = cloud.database();
 exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
-  const { type } = event; // 'organized' | 'joined' | 'available'
+  const { type, keyword } = event; // 'organized' | 'joined' | 'available' | 'search'
   
   try {
     let activities = [];
     
-    if (type === 'organized') {
+    if (type === 'search') {
+      // 搜索可参加的活动（报名中状态，按关键词匹配名称或地点）
+      try {
+        let query = {
+          status: 'registering'
+        };
+        
+        const result = await db.collection('activities')
+          .where(query)
+          .orderBy('time', 'asc')
+          .limit(100)
+          .get();
+        
+        activities = result.data || [];
+        
+        // 关键词过滤（云数据库不支持模糊查询，在前端过滤）
+        if (keyword && keyword.trim()) {
+          const kw = keyword.trim().toLowerCase();
+          // 类型中文映射
+          const typeMap = {
+            'singles': '单打',
+            'doubles': '双打轮换',
+            'fixed-doubles': '双打固搭'
+          };
+          activities = activities.filter(a => {
+            const nameMatch = a.name && a.name.toLowerCase().includes(kw);
+            const locationMatch = a.location && a.location.toLowerCase().includes(kw);
+            const typeCn = typeMap[a.type] || '';
+            const typeMatch = typeCn.includes(kw) || (a.type && a.type.toLowerCase().includes(kw));
+            return nameMatch || locationMatch || typeMatch;
+          });
+        }
+      } catch (e) {
+        console.log('查询search失败:', e.message);
+        activities = [];
+      }
+    } else if (type === 'organized') {
       try {
         const result = await db.collection('activities')
           .where({

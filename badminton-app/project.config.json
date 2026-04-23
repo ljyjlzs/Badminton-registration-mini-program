@@ -55,7 +55,9 @@
   },
   "simulatorPluginLibVersion": {},
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      { "type": "glob", "value": "cloudfunctions/*/node_modules/**" }
+    ],
     "include": []
   }
 }

@@ -1,4 +1,19 @@
 <view class="container">
+  <!-- 搜索栏 -->
+  <view class="search-bar">
+    <view class="search-input-wrap">
+      <text class="search-icon">🔍</text>
+      <input 
+        class="search-input" 
+        placeholder="{{currentTab === 'search' ? '搜索可参加的活动' : currentTab === 'joined' ? '搜索我参加的活动' : '搜索我创建的活动'}}" 
+        value="{{searchKeyword}}"
+        bindinput="onSearchInput"
+        bindconfirm="doSearch"
+        confirm-type="search"/>
+      <text wx:if="{{searchKeyword}}" class="search-clear" bindtap="clearSearch">✕</text>
+    </view>
+  </view>
+
   <view class="tab-header">
     <view 
       class="tab-item {{currentTab === 'created' ? 'active' : ''}}"
@@ -12,6 +27,12 @@
       bindtap="switchTab">
       我参加的
     </view>
+    <view 
+      class="tab-item {{currentTab === 'search' ? 'active' : ''}}"
+      data-tab="search"
+      bindtap="switchTab">
+      查找活动
+    </view>
   </view>
 
   <view class="content">
@@ -21,14 +42,18 @@
         <text>加载中...</text>
       </view>
       
-      <view wx:if="{{!loading && myCreatedActivities.length === 0}}" class="empty-tip">
+      <view wx:if="{{!loading && filteredCreatedActivities.length === 0 && !searchKeyword}}" class="empty-tip">
         <text>还没有创建活动</text>
         <button class="btn-create" bindtap="goToCreate">立即创建</button>
       </view>
+
+      <view wx:if="{{!loading && filteredCreatedActivities.length === 0 && searchKeyword}}" class="empty-tip">
+        <text>未找到匹配的活动</text>
+      </view>
       
-      <view wx:if="{{!loading && myCreatedActivities.length > 0}}" class="activity-list">
+      <view wx:if="{{filteredCreatedActivities.length > 0}}" class="activity-list">
         <view 
-          wx:for="{{myCreatedActivities}}" 
+          wx:for="{{filteredCreatedActivities}}" 
           wx:key="_id"
           class="activity-card"
           data-id="{{item._id}}"
@@ -40,6 +65,7 @@
               <text wx:elif="{{item.status === 'grouping'}}">分组中</text>
               <text wx:elif="{{item.status === 'playing'}}">比赛中</text>
               <text wx:elif="{{item.status === 'challenge'}}">挑战赛</text>
+              <text wx:elif="{{item.status === 'final'}}">决赛</text>
               <text wx:elif="{{item.status === 'finished'}}">已结束</text>
               <text wx:else>{{item.status}}</text>
             </view>
@@ -67,13 +93,17 @@
         <text>加载中...</text>
       </view>
       
-      <view wx:if="{{!loading && myJoinedActivities.length === 0}}" class="empty-tip">
+      <view wx:if="{{!loading && filteredJoinedActivities.length === 0 && !searchKeyword}}" class="empty-tip">
         <text>还没有参加任何活动</text>
       </view>
+
+      <view wx:if="{{!loading && filteredJoinedActivities.length === 0 && searchKeyword}}" class="empty-tip">
+        <text>未找到匹配的活动</text>
+      </view>
       
-      <view wx:if="{{!loading && myJoinedActivities.length > 0}}" class="activity-list">
+      <view wx:if="{{filteredJoinedActivities.length > 0}}" class="activity-list">
         <view 
-          wx:for="{{myJoinedActivities}}" 
+          wx:for="{{filteredJoinedActivities}}" 
           wx:key="_id"
           class="activity-card"
           data-id="{{item._id}}"
@@ -85,14 +115,57 @@
               <text wx:elif="{{item.status === 'grouping'}}">分组中</text>
               <text wx:elif="{{item.status === 'playing'}}">比赛中</text>
               <text wx:elif="{{item.status === 'challenge'}}">挑战赛</text>
+              <text wx:elif="{{item.status === 'final'}}">决赛</text>
               <text wx:elif="{{item.status === 'finished'}}">已结束</text>
-              <text wx:else>{{item.status}}</text>
+              <text wx-else>{{item.status}}</text>
             </view>
           </view>
           <view class="card-info">
             <text>📍 {{item.location}}</text>
             <text>🕐 {{formatTime(item.time)}}</text>
             <text>🏸 {{item.type === 'singles' ? '单打' : item.type === 'fixed-doubles' ? '双打固搭' : '双打'}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 查找活动 -->
+    <view wx:if="{{currentTab === 'search'}}" class="activity-section">
+      <view wx:if="{{searchLoading}}" class="loading">
+        <text>搜索中...</text>
+      </view>
+      
+      <view wx:if="{{!searchLoading && searchKeyword && searchResults.length === 0}}" class="empty-tip">
+        <text>未找到相关活动</text>
+      </view>
+      
+      <view wx:if="{{!searchLoading && !searchKeyword}}" class="empty-tip">
+        <text>输入关键词搜索可参加的活动</text>
+      </view>
+      
+      <view wx:if="{{searchResults.length > 0}}" class="activity-list">
+        <view 
+          wx:for="{{searchResults}}" 
+          wx:key="_id"
+          class="activity-card"
+          data-id="{{item._id}}"
+          bindtap="goToActivity">
+          <view class="card-header">
+            <text class="activity-name">{{item.name}}</text>
+            <view class="status-badge status-registering">报名中</view>
+          </view>
+          <view class="card-info">
+            <text>📍 {{item.location}}</text>
+            <text>🕐 {{formatTime(item.time)}}</text>
+            <text>🏸 {{item.type === 'singles' ? '单打' : item.type === 'fixed-doubles' ? '双打固搭' : '双打'}}</text>
+          </view>
+          <view class="card-progress">
+            <progress 
+              percent="{{(item.current_players / item.max_players) * 100}}" 
+              stroke-width="6"
+              active
+              show-info
+              activeColor="#07c160"/>
           </view>
         </view>
       </view>

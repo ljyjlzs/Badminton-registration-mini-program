@@ -5,6 +5,40 @@
   background-color: var(--bg-gray);
 }
 
+/* ============ 搜索栏 ============ */
+.search-bar {
+  padding: var(--spacing-md) var(--spacing-md) 0;
+  background-color: var(--bg-white);
+}
+
+.search-input-wrap {
+  display: flex;
+  align-items: center;
+  background: var(--bg-gray);
+  border-radius: var(--radius-lg);
+  padding: 16rpx 20rpx;
+  gap: 12rpx;
+}
+
+.search-icon {
+  font-size: 28rpx;
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  font-size: 28rpx;
+  color: var(--text-primary);
+  height: 40rpx;
+}
+
+.search-clear {
+  font-size: 24rpx;
+  color: var(--text-tertiary);
+  padding: 8rpx;
+  flex-shrink: 0;
+}
+
 /* ============ Tab 切换 ============ */
 .tab-header {
   display: flex;

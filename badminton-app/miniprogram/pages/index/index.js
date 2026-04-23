@@ -209,7 +209,7 @@ Page({
 
   goToActivityList: function() {
     wx.navigateTo({
-      url: '/pages/activity-list/activity-list'
+      url: '/pages/activity-list/activity-list?tab=search'
     });
   },
 
