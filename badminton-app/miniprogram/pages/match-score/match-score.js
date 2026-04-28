@@ -61,9 +61,6 @@ Page({
             isScorer: data.isScorer,
             userTeam: data.userTeam
           });
-          
-          // 监听比分变化
-          this.watchMatch();
         } else {
           wx.showToast({
             title: res.result.error || '加载失败',
@@ -76,38 +73,6 @@ Page({
         console.error('加载比赛详情失败：', err);
       }
     });
-  },
-
-  watchMatch: function() {
-    const db = wx.cloud.database();
-    
-    db.collection('matches').doc(this.data.matchId)
-      .watch({
-        onChange: res => {
-          if (res.docChanges.length > 0) {
-            const change = res.docChanges[0];
-            if (change.updatedFields) {
-              const updatedMatch = { ...this.data.match, ...change.updatedFields };
-              this.setData({
-                match: updatedMatch,
-                team1Score: updatedMatch.team1_score || 0,
-                team2Score: updatedMatch.team2_score || 0
-              });
-              
-              // 比分确认后提示
-              if (updatedMatch.status === 'confirmed') {
-                wx.showToast({
-                  title: '比分已确认，比赛结束',
-                  icon: 'success'
-                });
-              }
-            }
-          }
-        },
-        onError: err => {
-          console.error('监听失败：', err);
-        }
-      });
   },
 
   onTeam1ScoreChange: function(e) {
@@ -184,10 +149,9 @@ Page({
         
         if (res.result.success) {
           wx.showToast({
-            title: '比分已提交，等待双方确认',
+            title: '比分已提交',
             icon: 'success'
           });
-          
           this.loadMatchDetail();
         } else {
           wx.showToast({
@@ -207,74 +171,24 @@ Page({
     });
   },
 
-  confirmScore: function() {
+  modifyScore: function() {
     wx.showModal({
-      title: '确认比分',
-      content: `确认比分为 ${this.data.team1Score} - ${this.data.team2Score}？`,
+      title: '修改比分',
+      content: '确定要修改已提交的比分吗？修改后需重新输入并提交。',
+      confirmText: '确定修改',
+      cancelText: '取消',
       success: res => {
         if (res.confirm) {
-          this.doConfirmScore(true);
-        }
-      }
-    });
-  },
-
-  rejectScore: function() {
-    wx.showModal({
-      title: '拒绝比分',
-      content: '是否拒绝当前比分？',
-      success: res => {
-        if (res.confirm) {
-          this.doConfirmScore(false);
-        }
-      }
-    });
-  },
-
-  doConfirmScore: function(confirmed) {
-    wx.cloud.callFunction({
-      name: 'confirm-score',
-      data: {
-        activityId: this.data.activityId,
-        matchId: this.data.matchId,
-        confirmed: confirmed
-      },
-      success: res => {
-        if (res.result.success) {
-          if (confirmed) {
-            wx.showToast({
-              title: res.result.data.message || '已确认',
-              icon: 'success'
-            });
-          } else {
-            wx.showToast({
-              title: '已拒绝，等待重新录入',
-              icon: 'none'
-            });
-          }
-          
-          this.loadMatchDetail();
-        } else {
-          wx.showToast({
-            title: res.result.error || '操作失败',
-            icon: 'none'
+          // 重置比分输入，重新加载让用户输入新比分
+          this.setData({ 
+            team1Score: 0, 
+            team2Score: 0 
           });
+          // 重新加载比赛详情，submit-score 云函数会处理已确认比赛的修改
+          this.loadMatchDetail();
         }
       }
     });
-  },
-
-  getConfirmStatus: function() {
-    const match = this.data.match;
-    const userTeam = this.data.userTeam;
-    
-    if (!match || !userTeam) return '';
-    
-    if (userTeam === match.team1_id) {
-      return match.team1_confirmed ? '已确认' : '待确认';
-    } else {
-      return match.team2_confirmed ? '已确认' : '待确认';
-    }
   },
 
   goBack: function() {

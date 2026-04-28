@@ -223,7 +223,7 @@
           <view wx:if="{{item.status === 'confirming'}}" class="match-status confirm-status">
             待确认
           </view>
-        </view>
+      </view>
       </view>
     </view>
     

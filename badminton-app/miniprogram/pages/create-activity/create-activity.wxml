@@ -45,12 +45,11 @@
           maxlength="100"
           value="{{location}}"
           bindinput="onLocationInput"/>
-        <button 
+        <view 
           class="btn-select-location" 
-          size="mini" 
           bindtap="getLocation">
           选择
-        </button>
+        </view>
       </view>
     </view>
     

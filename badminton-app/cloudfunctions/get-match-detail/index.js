@@ -101,8 +101,9 @@ exports.main = async (event, context) => {
       userTeam = match.team2_id;
     }
     
-    // 判断是否为记分员（暂时只有组织者能记分）
-    const isScorer = isOrganizer;
+    // 判断是否为记分员（对局双方队员 + 组织者都可以记分）
+    const isPlayer = team1.members?.includes(openid) || team2.members?.includes(openid);
+    const isScorer = isOrganizer || isPlayer;
     
     return {
       success: true,

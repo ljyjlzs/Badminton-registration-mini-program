@@ -32,12 +32,8 @@
           <text class="score-num {{team2Score > team1Score ? 'winner' : ''}}">{{team2Score || '-'}}</text>
         </view>
         
-        <view wx:if="{{match && match.status === 'confirming'}}" class="confirm-hint">
-          等待双方确认
-        </view>
-        
         <view wx:if="{{match && match.status === 'confirmed'}}" class="confirmed-hint">
-          比赛结束
+          ✅ 比赛结束
         </view>
       </view>
       
@@ -49,8 +45,8 @@
       </view>
     </view>
     
-    <!-- 比分录入（记分员）- 比赛进行中或确认中显示 -->
-    <view wx:if="{{(isOrganizer || isScorer) && (match.status === 'playing' || match.status === 'confirming')}}" class="input-section">
+    <!-- 比分录入（对局双方 + 组织者）- 非已确认状态 -->
+    <view wx:if="{{(isOrganizer || isScorer) && match.status !== 'confirmed'}}" class="input-section">
       <view class="input-title">录入比分</view>
       
       <view class="score-inputs">
@@ -95,29 +91,6 @@
       </button>
     </view>
     
-    <!-- 比分确认（参赛队员或组织者） -->
-    <view wx:if="{{match.status === 'confirming' && (userTeam || isOrganizer)}}" class="confirm-section">
-      <view class="confirm-status">
-        <view class="status-item">
-          <text class="status-label">{{team1.name || '队伍1'}}：</text>
-          <text class="status-value {{match.team1_confirmed ? 'confirmed' : 'pending'}}">
-            {{match.team1_confirmed ? '✓ 已确认' : '待确认'}}
-          </text>
-        </view>
-        <view class="status-item">
-          <text class="status-label">{{team2.name || '队伍2'}}：</text>
-          <text class="status-value {{match.team2_confirmed ? 'confirmed' : 'pending'}}">
-            {{match.team2_confirmed ? '✓ 已确认' : '待确认'}}
-          </text>
-        </view>
-      </view>
-      
-      <view class="confirm-actions" wx:if="{{isOrganizer || (userTeam && !isOrganizer)}}">
-        <button class="btn-confirm" bindtap="confirmScore">确认比分</button>
-        <button class="btn-reject" bindtap="rejectScore" wx:if="{{!isOrganizer}}">有异议</button>
-      </view>
-    </view>
-    
     <!-- 已确认状态 -->
     <view wx:if="{{match.status === 'confirmed'}}" class="finished-section">
       <view class="result-text">
@@ -125,7 +98,10 @@
         <text wx:else>{{team2.name}} 获胜！</text>
       </view>
       
-      <button class="btn-back" bindtap="goBack">返回活动</button>
+      <view class="finished-actions">
+        <button wx:if="{{isOrganizer || isScorer}}" class="btn-modify" bindtap="modifyScore">修改比分</button>
+        <button class="btn-back" bindtap="goBack">返回活动</button>
+      </view>
     </view>
   </view>
 </view>
