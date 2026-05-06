@@ -1,5 +1,11 @@
 <!--pages/ai-chat/ai-chat.wxml-->
 <view class="container">
+  <!-- 顶部栏 -->
+  <view class="top-bar">
+    <view class="top-bar-title">AI 助手</view>
+    <view class="new-chat-btn" bindtap="clearHistory">新对话</view>
+  </view>
+
   <!-- 消息列表 -->
   <scroll-view
     class="msg-list"
@@ -7,6 +13,10 @@
     scroll-into-view="{{scrollToView}}"
     scroll-with-animation>
     <view wx:if="{{loadingHistory}}" class="loading-tip">加载历史消息...</view>
+    <view wx:if="{{!loadingHistory && messages.length === 0}}" class="empty-tip">
+      <text class="empty-icon">🤖</text>
+      <text class="empty-text">你好！我是羽毛球助手，可以帮你分析活动数据、查看排名等。试试问我问题吧！</text>
+    </view>
     <view wx:for="{{messages}}" wx:key="id" id="msg-{{index}}" class="msg-row {{item.role === 'user' ? 'msg-right' : 'msg-left'}}">
       <view class="msg-bubble {{item.role === 'user' ? 'bubble-user' : 'bubble-ai'}}">
         <text class="msg-text" user-select>{{item.content}}</text>
@@ -14,6 +24,7 @@
       <view class="msg-time">{{item.timeStr}}</view>
     </view>
     <view wx:if="{{loading}}" class="loading-tip">AI 思考中...</view>
+    <view id="msg-bottom-" style="height:1rpx;"></view>
   </scroll-view>
 
   <!-- 底部输入区 -->

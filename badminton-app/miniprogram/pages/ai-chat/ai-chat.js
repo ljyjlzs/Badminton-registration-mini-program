@@ -86,7 +86,8 @@ Page({
       },
       fail: err => {
         this.setData({ loading: false });
-        wx.showToast({ title: '发送失败', icon: 'none' });
+        console.error('ai-chat 云函数调用失败:', err);
+        wx.showToast({ title: err.errMsg || '发送失败', icon: 'none', duration: 3000 });
       }
     });
   },
