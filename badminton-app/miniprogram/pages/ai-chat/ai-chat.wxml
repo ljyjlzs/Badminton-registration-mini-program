@@ -1,0 +1,32 @@
+<!--pages/ai-chat/ai-chat.wxml-->
+<view class="container">
+  <!-- 消息列表 -->
+  <scroll-view
+    class="msg-list"
+    scroll-y
+    scroll-into-view="{{scrollToView}}"
+    scroll-with-animation>
+    <view wx:if="{{loadingHistory}}" class="loading-tip">加载历史消息...</view>
+    <view wx:for="{{messages}}" wx:key="id" id="msg-{{index}}" class="msg-row {{item.role === 'user' ? 'msg-right' : 'msg-left'}}">
+      <view class="msg-bubble {{item.role === 'user' ? 'bubble-user' : 'bubble-ai'}}">
+        <text class="msg-text" user-select>{{item.content}}</text>
+      </view>
+      <view class="msg-time">{{item.timeStr}}</view>
+    </view>
+    <view wx:if="{{loading}}" class="loading-tip">AI 思考中...</view>
+  </scroll-view>
+
+  <!-- 底部输入区 -->
+  <view class="input-bar">
+    <input
+      class="msg-input"
+      placeholder="输入消息..."
+      value="{{inputValue}}"
+      bindinput="onInput"
+      bindconfirm="sendMessage"
+      confirm-type="send"
+      disabled="{{loading}}"
+    />
+    <button class="send-btn {{loading || !inputValue ? 'disabled' : ''}}" bindtap="sendMessage" disabled="{{loading || !inputValue}}">发送</button>
+  </view>
+</view>

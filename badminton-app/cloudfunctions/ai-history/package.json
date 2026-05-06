@@ -1,0 +1,9 @@
+{
+  "name": "ai-history",
+  "version": "1.0.0",
+  "description": "聊天历史管理",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

@@ -10,6 +10,7 @@
  *    - teams
  *    - matches
  *    - scores
+ *    - ai_messages
  * 
  * 集合索引配置：
  * 
@@ -85,6 +86,12 @@
       "create": true,
       "update": true,
       "delete": true
+    },
+    "ai_messages": {
+      "read": "doc.user_id == auth.openid",
+      "create": "doc.user_id == auth.openid",
+      "update": false,
+      "delete": false
     }
   }
 }

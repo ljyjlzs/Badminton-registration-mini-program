@@ -69,30 +69,76 @@
             <text wx:if="{{activity.type === 'fixed-doubles' && item.partner_id}}" class="partner-tag">搭档: {{item.partner_nickname || '已配对'}}</text>
           </view>
            <view class="level-badge level-{{item.level || 5}}">Lv.{{item.level || 5}}</view>
+
+          <!-- 取消中标签（组织者视角） -->
+          <view wx:if="{{item.cancel_status === 'pending'}}" class="cancel-request-tag">取消中</view>
+
+          <!-- 组织者审批按钮 -->
+          <view wx:if="{{isOrganizer && item.cancel_status === 'pending'}}" class="cancel-actions">
+            <button class="btn-approve" bindtap="handleCancel" data-id="{{item._id}}" data-action="approve">同意</button>
+            <button class="btn-reject" bindtap="handleCancel" data-id="{{item._id}}" data-action="reject">拒绝</button>
+          </view>
+
+          <!-- 已取消/已拒绝标签 -->
+          <view wx:if="{{item.cancel_status === 'approved'}}" class="cancel-done-tag">已取消</view>
+          <view wx:if="{{item.cancel_status === 'rejected'}}" class="cancel-done-tag rejected">已拒绝</view>
         </view>
-        
+
         <view wx:if="{{registrations.length === 0}}" class="empty-tip">
           暂无报名，等你来加入
         </view>
       </view>
+
+      <!-- 组织者：待处理取消请求提示 -->
+      <view wx:if="{{isOrganizer && pendingCancelCount > 0}}" class="pending-cancel-tip">
+        有 {{pendingCancelCount}} 人申请取消报名，请在上方报名列表中处理
+      </view>
       
       <!-- 报名按钮 -->
       <view class="action-section">
-        <button 
+        <button
           wx:if="{{!userRegistration && activity.current_players < activity.max_players}}"
           class="btn-primary"
           bindtap="joinActivity">
           报名参加
         </button>
-        
-        <view wx:if="{{userRegistration && activity.status === 'registering'}}" class="joined-tip" bindtap="showLevelPicker">
-           您已报名 (Lv.{{userRegistration.level}}) - 点击修改等级
-         </view>
-         <view wx:elif="{{userRegistration}}" class="joined-tip">
-            您已报名 (Lv.{{userRegistration.level}})
-        </view>
-        
-        <view wx:if="{{activity.current_players >= activity.max_players}}" class="full-tip">
+
+        <!-- 已报名：正常状态 -->
+        <block wx:if="{{userRegistration && !userRegistration.cancel_status}}">
+          <view wx:if="{{activity.status === 'registering'}}" class="joined-tip" bindtap="showLevelPicker">
+             您已报名 (Lv.{{userRegistration.level}}) - 点击修改等级
+           </view>
+           <view wx:elif="{{userRegistration}}" class="joined-tip">
+              您已报名 (Lv.{{userRegistration.level}})
+          </view>
+          <!-- 取消报名按钮（非组织者且报名中状态） -->
+          <button
+            wx:if="{{activity.status === 'registering' && !isOrganizer}}"
+            class="btn-cancel-reg"
+            bindtap="cancelRegistration">
+            取消报名
+          </button>
+        </block>
+
+        <!-- 已提交取消申请 -->
+        <block wx:if="{{userRegistration && userRegistration.cancel_status === 'pending'}}">
+          <view class="cancel-pending-tip">已申请取消，等待组织者确认</view>
+        </block>
+
+        <!-- 取消被拒绝 -->
+        <block wx:if="{{userRegistration && userRegistration.cancel_status === 'rejected'}}">
+          <view class="joined-tip" bindtap="showLevelPicker">
+             您已报名 (Lv.{{userRegistration.level}}) - 点击修改等级
+          </view>
+          <button
+            wx:if="{{activity.status === 'registering' && !isOrganizer}}"
+            class="btn-cancel-reg"
+            bindtap="cancelRegistration">
+            重新申请取消
+          </button>
+        </block>
+
+        <view wx:if="{{!userRegistration && activity.current_players >= activity.max_players}}" class="full-tip">
           报名已满
         </view>
       </view>

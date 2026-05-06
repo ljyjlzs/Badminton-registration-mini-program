@@ -65,7 +65,7 @@
         <view class="action-icon">+</view>
         <text class="action-text">创建活动</text>
       </view>
-      <view class="action-item" bindtap="goToActivityList">
+      <view class="action-item" bindtap="goToActivityList" data-tab="search">
         <view class="action-icon">🔍</view>
         <text class="action-text">查找活动</text>
       </view>

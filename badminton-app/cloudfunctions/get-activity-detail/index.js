@@ -68,8 +68,14 @@ exports.main = async (event, context) => {
       nickname: reg.nickname || usersMap[reg.user_id]?.nickname || '未知用户',
       avatar: reg.avatar || usersMap[reg.user_id]?.avatar || '',
       level: reg.level,
-      partner_id: reg.partner_id || null
+      partner_id: reg.partner_id || null,
+      cancel_status: reg.cancel_status || null
     }));
+
+    // 统计待处理取消请求数
+    const pendingCancelCount = (registrationsResult.data || []).filter(
+      r => r.cancel_status === 'pending'
+    ).length;
 
     // 构建报名昵称和头像映射
     const regNicknames = {};
@@ -205,7 +211,8 @@ exports.main = async (event, context) => {
         matches,
         teams,
         userRegistration,
-        isOrganizer: activity.organizer_id === openid
+        isOrganizer: activity.organizer_id === openid,
+        pendingCancelCount
       }
     };
   } catch (err) {

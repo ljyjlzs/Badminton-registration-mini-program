@@ -1,0 +1,9 @@
+{
+  "name": "handle-cancel-request",
+  "version": "1.0.0",
+  "description": "组织者审批取消报名请求",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

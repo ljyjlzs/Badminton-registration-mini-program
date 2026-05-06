@@ -30,13 +30,15 @@ Page({
   },
 
   onLoad: function(options) {
-    if (options && options.tab === 'search') {
-      this.setData({ currentTab: 'search' });
-    }
+    // tabBar 页面不支持 url 参数，通过 globalData 传递
+    const app = getApp();
+    const targetTab = app.globalData.activityListTab || 'created';
+    this.setData({ currentTab: targetTab });
     this.loadActivities();
   },
 
   onShow: function() {
+    // 每次显示时刷新数据
     this.loadActivities();
   },
 

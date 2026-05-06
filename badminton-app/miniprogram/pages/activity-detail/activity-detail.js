@@ -9,6 +9,7 @@ Page({
      matches: [],
      userRegistration: null,
      isOrganizer: false,
+     pendingCancelCount: 0,
      loading: true,
      showLevelPicker: false,
      selectedLevel: 5,
@@ -85,6 +86,7 @@ Page({
             matches: matches,
             userRegistration: data.userRegistration || null,
             isOrganizer: data.isOrganizer || false,
+            pendingCancelCount: data.pendingCancelCount || 0,
             hasChallengeMatches: hasChallengeMatches,
             hasFinalMatches: hasFinalMatches,
             allGroupFinished: allGroupFinished,
@@ -747,6 +749,76 @@ Page({
                 title: '操作失败',
                 icon: 'none'
               });
+            }
+          });
+        }
+      }
+    });
+  },
+
+  cancelRegistration: function() {
+    const activity = this.data.activity;
+    const reg = this.data.userRegistration;
+    
+    wx.showModal({
+      title: '确认取消报名',
+      content: '取消报名需要组织者确认后才会生效，确定要申请取消吗？',
+      success: res => {
+        if (res.confirm) {
+          wx.showLoading({ title: '提交中...' });
+          wx.cloud.callFunction({
+            name: 'cancel-registration',
+            data: {
+              activityId: this.data.activityId
+            },
+            success: res => {
+              wx.hideLoading();
+              if (res.result && res.result.success) {
+                wx.showToast({ title: '已提交取消申请', icon: 'success' });
+                this.loadActivityDetail();
+              } else {
+                wx.showToast({ title: res.result?.error || '操作失败', icon: 'none' });
+              }
+            },
+            fail: err => {
+              wx.hideLoading();
+              wx.showToast({ title: '操作失败', icon: 'none' });
+            }
+          });
+        }
+      }
+    });
+  },
+
+  handleCancel: function(e) {
+    const registrationId = e.currentTarget.dataset.id;
+    const action = e.currentTarget.dataset.action;
+    const actionText = action === 'approve' ? '同意' : '拒绝';
+    
+    wx.showModal({
+      title: `${actionText}取消报名`,
+      content: `确定${actionText}该用户的取消报名请求吗？`,
+      success: res => {
+        if (res.confirm) {
+          wx.showLoading({ title: '处理中...' });
+          wx.cloud.callFunction({
+            name: 'handle-cancel-request',
+            data: {
+              registrationId: registrationId,
+              action: action
+            },
+            success: res => {
+              wx.hideLoading();
+              if (res.result && res.result.success) {
+                wx.showToast({ title: res.result.message || '处理成功', icon: 'success' });
+                this.loadActivityDetail();
+              } else {
+                wx.showToast({ title: res.result?.error || '操作失败', icon: 'none' });
+              }
+            },
+            fail: err => {
+              wx.hideLoading();
+              wx.showToast({ title: '操作失败', icon: 'none' });
             }
           });
         }

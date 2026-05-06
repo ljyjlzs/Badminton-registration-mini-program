@@ -1,0 +1,9 @@
+{
+  "name": "cancel-registration",
+  "version": "1.0.0",
+  "description": "用户申请取消报名",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

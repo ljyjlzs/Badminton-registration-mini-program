@@ -207,9 +207,12 @@ Page({
     });
   },
 
-  goToActivityList: function() {
-    wx.navigateTo({
-      url: '/pages/activity-list/activity-list?tab=search'
+  goToActivityList: function(e) {
+    const tab = e && e.currentTarget && e.currentTarget.dataset ? e.currentTarget.dataset.tab : 'search';
+    const app = getApp();
+    app.globalData.activityListTab = tab || 'search';
+    wx.switchTab({
+      url: '/pages/activity-list/activity-list'
     });
   },
 
