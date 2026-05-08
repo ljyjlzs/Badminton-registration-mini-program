@@ -1,99 +1,119 @@
-<view class="container">
-  <view class="form-section">
-    <view class="form-title">创建羽毛球活动</view>
-    
-    <view class="form-item">
-      <view class="form-label">活动名称 *</view>
-      <input 
-        class="form-input" 
-        placeholder="请输入活动名称"
-        maxlength="50"
-        value="{{name}}"
-        bindinput="onNameInput"/>
+<view class="create-page">
+  <view class="page-shell">
+    <view class="form-hero">
+      <view class="hero-badge">NEW ACTIVITY</view>
+      <view class="hero-title">创建一场新比赛</view>
+      <view class="hero-desc">把时间、地点和赛制先定下来，后面的报名和分组会顺很多。</view>
     </view>
 
-    <view class="form-item">
-      <view class="form-label">活动类型 *</view>
-      <view class="type-toggle">
-        <view 
-          class="type-btn {{activityType === 'singles' ? 'active' : ''}}" 
-          data-type="singles"
-          bindtap="onTypeChange">
-          单打
-        </view>
-        <view 
-          class="type-btn {{activityType === 'doubles' ? 'active' : ''}}" 
-          data-type="doubles"
-          bindtap="onTypeChange">
-          双打
-        </view>
-        <view 
-          class="type-btn {{activityType === 'fixed-doubles' ? 'active' : ''}}" 
-          data-type="fixed-doubles"
-          bindtap="onTypeChange">
-          双打固搭
+    <view class="form-section">
+      <view class="form-title">基础信息</view>
+
+      <view class="form-item">
+        <view class="form-label">活动名称 *</view>
+        <input
+          class="form-input"
+          placeholder="请输入活动名称"
+          maxlength="50"
+          value="{{name}}"
+          bindinput="onNameInput"/>
+      </view>
+
+      <view class="form-item">
+        <view class="form-label">活动类型 *</view>
+        <view class="type-toggle">
+          <view
+            class="type-btn {{activityType === 'singles' ? 'active' : ''}}"
+            data-type="singles"
+            bindtap="onTypeChange">
+            单打
+          </view>
+          <view
+            class="type-btn {{activityType === 'doubles' ? 'active' : ''}}"
+            data-type="doubles"
+            bindtap="onTypeChange">
+            双打轮转
+          </view>
+          <view
+            class="type-btn {{activityType === 'fixed-doubles' ? 'active' : ''}}"
+            data-type="fixed-doubles"
+            bindtap="onTypeChange">
+            双打固搭
+          </view>
         </view>
       </view>
     </view>
-    
-    <view class="form-item">
-      <view class="form-label">活动地点 *</view>
-      <view class="location-row">
-        <input 
-          class="form-input location-input" 
-          placeholder="请输入或选择活动地点"
-          maxlength="100"
-          value="{{location}}"
-          bindinput="onLocationInput"/>
-        <view 
-          class="btn-select-location" 
-          bindtap="getLocation">
-          选择
+
+    <view class="form-section">
+      <view class="form-title">时间与地点</view>
+
+      <view class="form-item">
+        <view class="form-label">活动地点 *</view>
+        <view class="location-row">
+          <input
+            class="form-input location-input"
+            placeholder="请输入或选择活动地点"
+            maxlength="100"
+            value="{{location}}"
+            bindinput="onLocationInput"/>
+          <view
+            class="btn-select-location"
+            bindtap="getLocation">
+            选择
+          </view>
+        </view>
+      </view>
+
+      <view class="double-picker-row">
+        <view class="form-item picker-item">
+          <view class="form-label">活动日期 *</view>
+          <picker mode="date" value="{{date}}" bindchange="onDateChange">
+            <view class="picker-value">
+              {{date || '请选择日期'}}
+            </view>
+          </picker>
+        </view>
+
+        <view class="form-item picker-item">
+          <view class="form-label">活动时间 *</view>
+          <picker mode="time" value="{{time}}" bindchange="onTimeChange">
+            <view class="picker-value">
+              {{time || '请选择时间'}}
+            </view>
+          </picker>
+        </view>
+      </view>
+
+      <view class="form-item">
+        <view class="form-label">人数要求</view>
+        <view class="player-info">
+          <view class="player-chip">
+            <text class="player-label">最少开赛</text>
+            <text class="player-value">{{minPlayers}} 人</text>
+          </view>
+          <view class="player-chip">
+            <text class="player-label">最多报名</text>
+            <text class="player-value">{{maxPlayers}} 人</text>
+          </view>
         </view>
       </view>
     </view>
-    
-    <view class="form-item">
-      <view class="form-label">活动日期 *</view>
-      <picker mode="date" value="{{date}}" bindchange="onDateChange">
-        <view class="picker-value">
-          {{date || '请选择日期'}}
-        </view>
-      </picker>
+
+    <view class="tip-section">
+      <view class="tip-title">创建后会发生什么</view>
+      <view class="tip-item">你会成为活动组织者，后续可直接管理报名和赛程。</view>
+      <view class="tip-item">报名人数达到 {{minPlayers}} 人后，就可以开始分组。</view>
+      <view class="tip-item">活动最多允许 {{maxPlayers}} 人报名，超出后会自动显示已满。</view>
+      <view class="tip-item">报名后不能直接退出，需要由组织者确认取消申请。</view>
     </view>
-    
-    <view class="form-item">
-      <view class="form-label">活动时间 *</view>
-      <picker mode="time" value="{{time}}" bindchange="onTimeChange">
-        <view class="picker-value">
-          {{time || '请选择时间'}}
-        </view>
-      </picker>
+
+    <view class="submit-bar">
+      <button
+        class="btn-submit"
+        bindtap="submit"
+        disabled="{{loading}}">
+        {{loading ? '创建中...' : '创建活动'}}
+      </button>
     </view>
-    
-    <view class="form-item">
-      <view class="form-label">人数要求</view>
-      <view class="player-info">
-        <text>最少 {{minPlayers}} 人开赛</text>
-        <text>最多 {{maxPlayers}} 人</text>
-      </view>
-    </view>
-  </view>
-  
-  <view class="tip-section">
-    <view class="tip-title">温馨提示</view>
-    <view class="tip-item">• 活动创建后，您将成为该活动的组织者</view>
-    <view class="tip-item">• 报名人数满 {{minPlayers}} 人后可以开始分组</view>
-    <view class="tip-item">• 活动最多允许 {{maxPlayers}} 人报名</view>
-    <view class="tip-item">• 报名后无法退出，如需离开需找人代替</view>
-  </view>
-  
-  <view class="btn-submit-container">
-    <button 
-      class="btn-submit" 
-      bindtap="submit"
-      disabled="{{loading}}">
-      {{loading ? '创建中...' : '创建活动'}}
-    </button>
   </view>
 </view>

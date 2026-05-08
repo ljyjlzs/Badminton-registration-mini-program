@@ -1,100 +1,112 @@
-<view class="container">
-  <view wx:if="{{loading}}" class="loading">
+<view class="ranking-page">
+  <view wx:if="{{loading}}" class="loading ranking-loading">
+    <view class="loading-spinner"></view>
     <text>加载中...</text>
   </view>
-  
+
   <view wx:if="{{!loading}}" class="content">
-    <!-- 标签切换 -->
-    <view class="tab-header">
-      <view 
-        class="tab-item {{currentTab === 'individual' ? 'active' : ''}}"
-        data-tab="individual"
-        bindtap="switchTab">
-        个人排名
-      </view>
-      <view 
-        class="tab-item {{currentTab === 'team' ? 'active' : ''}}"
-        data-tab="team"
-        bindtap="switchTab">
-        队伍排名
+    <view class="ranking-hero">
+      <view class="hero-badge">LEADERBOARD</view>
+      <view class="hero-title">比赛排名</view>
+      <view class="hero-desc">查看当前活动的个人榜和队伍榜，看看谁在领先。</view>
+    </view>
+
+    <view class="tab-shell">
+      <view class="tab-header">
+        <view
+          class="tab-item {{currentTab === 'individual' ? 'active' : ''}}"
+          data-tab="individual"
+          bindtap="switchTab">
+          个人排名
+        </view>
+        <view
+          class="tab-item {{currentTab === 'team' ? 'active' : ''}}"
+          data-tab="team"
+          bindtap="switchTab">
+          队伍排名
+        </view>
       </view>
     </view>
-    
-    <!-- 个人排名 -->
+
     <view wx:if="{{currentTab === 'individual'}}" class="ranking-section">
       <view wx:if="{{individualRankings.length === 0}}" class="empty-tip">
-        暂无排名数据
+        <text class="empty-icon">🏆</text>
+        <text class="empty-text">暂时没有排名数据</text>
+        <text class="empty-desc">等比赛产生比分后，这里会自动更新榜单。</text>
       </view>
-      
+
       <view wx:else class="ranking-list">
-        <view 
-          wx:for="{{individualRankings}}" 
+        <view
+          wx:for="{{individualRankings}}"
           wx:key="userId"
           class="ranking-item {{getRankClass(item.rank)}}">
-          
           <view class="rank-badge">
-            <text wx:if="{{item.rank <= 3}}" class="rank-icon">🏆</text>
+            <text wx:if="{{item.rank === 1}}" class="rank-icon">🥇</text>
+            <text wx:elif="{{item.rank === 2}}" class="rank-icon">🥈</text>
+            <text wx:elif="{{item.rank === 3}}" class="rank-icon">🥉</text>
             <text wx:else class="rank-num">{{item.rank}}</text>
           </view>
-          
-            <image 
-              wx:if="{{item.avatar && item.avatar.trim().length > 0}}" 
-              class="ranking-avatar" 
-              src="{{item.avatar}}" 
-              mode="aspectFill"></image>
-            <view wx:else class="avatar-text">{{item.nickname && item.nickname.length > 0 ? item.nickname[0] : '?'}}</view>
-          
+
+          <image
+            wx:if="{{item.avatar && item.avatar.trim().length > 0}}"
+            class="ranking-avatar"
+            src="{{item.avatar}}"
+            mode="aspectFill"></image>
+          <view wx:else class="avatar-text">{{item.nickname && item.nickname.length > 0 ? item.nickname[0] : '?'}}</view>
+
           <view class="user-info">
             <view class="user-name">{{item.nickname || '未知'}}</view>
             <view class="user-level">Lv.{{item.level || 5}}</view>
           </view>
-          
+
           <view class="score-info">
             <view class="total-score {{getScoreClass(item.totalScore)}}">
-              {{item.totalScore > 0 ? '+' : ''}}{{item.totalScore}}分
+              {{item.totalScore > 0 ? '+' : ''}}{{item.totalScore}} 分
             </view>
             <view class="score-detail">
-              <text>小组赛: {{item.groupScore > 0 ? '+' : ''}}{{item.groupScore}}</text>
-              <text wx:if="{{item.challengeScore !== 0}}">挑战赛: {{item.challengeScore > 0 ? '+' : ''}}{{item.challengeScore}}</text>
-              <text wx:if="{{item.finalScore !== 0}}">决赛: {{item.finalScore > 0 ? '+' : ''}}{{item.finalScore}}</text>
+              <text>小组赛 {{item.groupScore > 0 ? '+' : ''}}{{item.groupScore}}</text>
+              <text wx:if="{{item.challengeScore !== 0}}">挑战赛 {{item.challengeScore > 0 ? '+' : ''}}{{item.challengeScore}}</text>
+              <text wx:if="{{item.finalScore !== 0}}">决赛 {{item.finalScore > 0 ? '+' : ''}}{{item.finalScore}}</text>
             </view>
           </view>
         </view>
       </view>
     </view>
-    
-    <!-- 队伍排名 -->
+
     <view wx:if="{{currentTab === 'team'}}" class="ranking-section">
       <view wx:if="{{teamRankings.length === 0}}" class="empty-tip">
-        暂无队伍排名
+        <text class="empty-icon">👥</text>
+        <text class="empty-text">暂时没有队伍排名</text>
+        <text class="empty-desc">队伍积分生成后，这里会展示每支队伍的表现。</text>
       </view>
-      
+
       <view wx:else class="ranking-list">
-        <view 
-          wx:for="{{teamRankings}}" 
+        <view
+          wx:for="{{teamRankings}}"
           wx:key="teamId"
           class="ranking-item team-item {{getRankClass(item.rank)}}">
-          
           <view class="rank-badge">
-            <text wx:if="{{item.rank <= 3}}" class="rank-icon">🏆</text>
+            <text wx:if="{{item.rank === 1}}" class="rank-icon">🥇</text>
+            <text wx:elif="{{item.rank === 2}}" class="rank-icon">🥈</text>
+            <text wx:elif="{{item.rank === 3}}" class="rank-icon">🥉</text>
             <text wx:else class="rank-num">{{item.rank}}</text>
           </view>
-          
+
           <view class="team-info-full">
             <view class="team-name">{{item.name}}</view>
             <view class="team-members-row">
               <view wx:for="{{item.members}}" wx:key="userId" wx:for-item="member" class="team-member">
-                 <image 
-                   wx:if="{{member.avatar && member.avatar.trim().length > 0}}" 
-                   class="member-avatar-img" 
-                   src="{{member.avatar}}" 
-                   mode="aspectFill"></image>
-                 <view wx:else class="member-avatar-text">{{member && member.nickname && member.nickname.trim().length > 0 ? member.nickname.trim()[0] : '?'}}</view>
+                <image
+                  wx:if="{{member.avatar && member.avatar.trim().length > 0}}"
+                  class="member-avatar-img"
+                  src="{{member.avatar}}"
+                  mode="aspectFill"></image>
+                <view wx:else class="member-avatar-text">{{member && member.nickname && member.nickname.trim().length > 0 ? member.nickname.trim()[0] : '?'}}</view>
                 <text class="member-name">{{member && member.nickname ? member.nickname : '未知'}}</text>
               </view>
             </view>
           </view>
-          
+
           <view class="team-score">
             <text class="score-num {{getScoreClass(item.totalScore)}}">
               {{item.totalScore > 0 ? '+' : ''}}{{item.totalScore}}

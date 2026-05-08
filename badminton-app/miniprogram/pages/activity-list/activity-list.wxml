@@ -1,64 +1,75 @@
-<view class="container">
-  <!-- 搜索栏 -->
+<view class="activity-page">
+  <view class="list-hero">
+    <view class="hero-badge">ACTIVITY HUB</view>
+    <view class="hero-title">活动中心</view>
+    <view class="hero-desc">创建、加入、搜索比赛，所有活动都在这里。</view>
+  </view>
+
   <view class="search-bar">
     <view class="search-input-wrap">
-      <text class="search-icon">🔍</text>
-      <input 
-        class="search-input" 
-        placeholder="{{currentTab === 'search' ? '搜索可参加的活动' : currentTab === 'joined' ? '搜索我参加的活动' : '搜索我创建的活动'}}" 
+      <text class="search-icon">🔎</text>
+      <input
+        class="search-input"
+        placeholder="{{currentTab === 'search' ? '搜索可参加的活动' : currentTab === 'joined' ? '搜索我参加的活动' : '搜索我创建的活动'}}"
         value="{{searchKeyword}}"
         bindinput="onSearchInput"
         bindconfirm="doSearch"
         confirm-type="search"/>
-      <text wx:if="{{searchKeyword}}" class="search-clear" bindtap="clearSearch">✕</text>
+      <text wx:if="{{searchKeyword}}" class="search-clear" bindtap="clearSearch">清除</text>
     </view>
   </view>
 
-  <view class="tab-header">
-    <view 
-      class="tab-item {{currentTab === 'created' ? 'active' : ''}}"
-      data-tab="created"
-      bindtap="switchTab">
-      我创建的
-    </view>
-    <view 
-      class="tab-item {{currentTab === 'joined' ? 'active' : ''}}"
-      data-tab="joined"
-      bindtap="switchTab">
-      我参加的
-    </view>
-    <view 
-      class="tab-item {{currentTab === 'search' ? 'active' : ''}}"
-      data-tab="search"
-      bindtap="switchTab">
-      查找活动
+  <view class="tab-shell">
+    <view class="tab-header">
+      <view
+        class="tab-item {{currentTab === 'created' ? 'active' : ''}}"
+        data-tab="created"
+        bindtap="switchTab">
+        我创建的
+      </view>
+      <view
+        class="tab-item {{currentTab === 'joined' ? 'active' : ''}}"
+        data-tab="joined"
+        bindtap="switchTab">
+        我参加的
+      </view>
+      <view
+        class="tab-item {{currentTab === 'search' ? 'active' : ''}}"
+        data-tab="search"
+        bindtap="switchTab">
+        查找活动
+      </view>
     </view>
   </view>
 
   <view class="content">
-    <!-- 创建的活动 -->
     <view wx:if="{{currentTab === 'created'}}" class="activity-section">
       <view wx:if="{{loading}}" class="loading">
+        <view class="loading-spinner"></view>
         <text>加载中...</text>
       </view>
-      
+
       <view wx:if="{{!loading && filteredCreatedActivities.length === 0 && !searchKeyword}}" class="empty-tip">
-        <text>还没有创建活动</text>
+        <text class="empty-icon">🏸</text>
+        <text class="empty-text">还没有创建活动</text>
+        <text class="empty-desc">先发起一场比赛，之后这里会展示你组织的所有活动。</text>
         <button class="btn-create" bindtap="goToCreate">立即创建</button>
       </view>
 
       <view wx:if="{{!loading && filteredCreatedActivities.length === 0 && searchKeyword}}" class="empty-tip">
-        <text>未找到匹配的活动</text>
+        <text class="empty-icon">🔍</text>
+        <text class="empty-text">没有找到匹配活动</text>
+        <text class="empty-desc">换个关键词试试，或者检查时间和地点名称。</text>
       </view>
-      
+
       <view wx:if="{{filteredCreatedActivities.length > 0}}" class="activity-list">
-        <view 
-          wx:for="{{filteredCreatedActivities}}" 
+        <view
+          wx:for="{{filteredCreatedActivities}}"
           wx:key="_id"
           class="activity-card"
           data-id="{{item._id}}"
           bindtap="goToActivity">
-          <view class="card-header">
+          <view class="card-top">
             <text class="activity-name">{{item.name}}</text>
             <view class="status-badge status-{{item.status}}">
               <text wx:if="{{item.status === 'registering'}}">报名中</text>
@@ -70,45 +81,54 @@
               <text wx:else>{{item.status}}</text>
             </view>
           </view>
-          <view class="card-info">
-            <text>📍 {{item.location}}</text>
-            <text>🕐 {{formatTime(item.time)}}</text>
-            <text>🏸 {{item.type === 'singles' ? '单打' : item.type === 'fixed-doubles' ? '双打固搭' : '双打'}}</text>
+
+          <view class="meta-row">
+            <text class="meta-item">📍 {{item.location}}</text>
+            <text class="meta-item">🕒 {{formatTime(item.time)}}</text>
+            <text class="meta-item">🏸 {{item.type === 'singles' ? '单打' : item.type === 'fixed-doubles' ? '双打固搭' : '双打轮转'}}</text>
           </view>
-          <view class="card-progress">
-            <progress 
-              percent="{{(item.current_players / item.max_players) * 100}}" 
-              stroke-width="6"
-              active
-              show-info
-              activeColor="#07c160"/>
+
+          <view class="progress-row">
+            <text class="progress-label">报名进度</text>
+            <text class="progress-count">{{item.current_players || 0}} / {{item.max_players}}</text>
           </view>
+
+          <progress
+            percent="{{(item.current_players / item.max_players) * 100}}"
+            stroke-width="8"
+            active
+            activeColor="#0ea56b"
+            backgroundColor="#dfe8e4"/>
         </view>
       </view>
     </view>
 
-    <!-- 参加的活动 -->
     <view wx:if="{{currentTab === 'joined'}}" class="activity-section">
       <view wx:if="{{loading}}" class="loading">
+        <view class="loading-spinner"></view>
         <text>加载中...</text>
       </view>
-      
+
       <view wx:if="{{!loading && filteredJoinedActivities.length === 0 && !searchKeyword}}" class="empty-tip">
-        <text>还没有参加任何活动</text>
+        <text class="empty-icon">📅</text>
+        <text class="empty-text">还没有参加活动</text>
+        <text class="empty-desc">你报名过的比赛，都会集中显示在这里。</text>
       </view>
 
       <view wx:if="{{!loading && filteredJoinedActivities.length === 0 && searchKeyword}}" class="empty-tip">
-        <text>未找到匹配的活动</text>
+        <text class="empty-icon">🔍</text>
+        <text class="empty-text">没有找到匹配活动</text>
+        <text class="empty-desc">试试更换关键词，或者切换到查找活动页签。</text>
       </view>
-      
+
       <view wx:if="{{filteredJoinedActivities.length > 0}}" class="activity-list">
-        <view 
-          wx:for="{{filteredJoinedActivities}}" 
+        <view
+          wx:for="{{filteredJoinedActivities}}"
           wx:key="_id"
           class="activity-card"
           data-id="{{item._id}}"
           bindtap="goToActivity">
-          <view class="card-header">
+          <view class="card-top">
             <text class="activity-name">{{item.name}}</text>
             <view class="status-badge status-{{item.status}}">
               <text wx:if="{{item.status === 'registering'}}">报名中</text>
@@ -117,56 +137,66 @@
               <text wx:elif="{{item.status === 'challenge'}}">挑战赛</text>
               <text wx:elif="{{item.status === 'final'}}">决赛</text>
               <text wx:elif="{{item.status === 'finished'}}">已结束</text>
-              <text wx-else>{{item.status}}</text>
+              <text wx:else>{{item.status}}</text>
             </view>
           </view>
-          <view class="card-info">
-            <text>📍 {{item.location}}</text>
-            <text>🕐 {{formatTime(item.time)}}</text>
-            <text>🏸 {{item.type === 'singles' ? '单打' : item.type === 'fixed-doubles' ? '双打固搭' : '双打'}}</text>
+
+          <view class="meta-row">
+            <text class="meta-item">📍 {{item.location}}</text>
+            <text class="meta-item">🕒 {{formatTime(item.time)}}</text>
+            <text class="meta-item">🏸 {{item.type === 'singles' ? '单打' : item.type === 'fixed-doubles' ? '双打固搭' : '双打轮转'}}</text>
           </view>
         </view>
       </view>
     </view>
 
-    <!-- 查找活动 -->
     <view wx:if="{{currentTab === 'search'}}" class="activity-section">
       <view wx:if="{{searchLoading}}" class="loading">
+        <view class="loading-spinner"></view>
         <text>搜索中...</text>
       </view>
-      
+
       <view wx:if="{{!searchLoading && searchKeyword && searchResults.length === 0}}" class="empty-tip">
-        <text>未找到相关活动</text>
+        <text class="empty-icon">🧭</text>
+        <text class="empty-text">没有搜到相关活动</text>
+        <text class="empty-desc">可以试试输入活动名称、地点，或者比赛类型。</text>
       </view>
-      
+
       <view wx:if="{{!searchLoading && !searchKeyword}}" class="empty-tip">
-        <text>输入关键词搜索可参加的活动</text>
+        <text class="empty-icon">🔎</text>
+        <text class="empty-text">输入关键词开始搜索</text>
+        <text class="empty-desc">支持按活动名称、地点和比赛类型查找。</text>
       </view>
-      
+
       <view wx:if="{{searchResults.length > 0}}" class="activity-list">
-        <view 
-          wx:for="{{searchResults}}" 
+        <view
+          wx:for="{{searchResults}}"
           wx:key="_id"
           class="activity-card"
           data-id="{{item._id}}"
           bindtap="goToActivity">
-          <view class="card-header">
+          <view class="card-top">
             <text class="activity-name">{{item.name}}</text>
             <view class="status-badge status-registering">报名中</view>
           </view>
-          <view class="card-info">
-            <text>📍 {{item.location}}</text>
-            <text>🕐 {{formatTime(item.time)}}</text>
-            <text>🏸 {{item.type === 'singles' ? '单打' : item.type === 'fixed-doubles' ? '双打固搭' : '双打'}}</text>
+
+          <view class="meta-row">
+            <text class="meta-item">📍 {{item.location}}</text>
+            <text class="meta-item">🕒 {{formatTime(item.time)}}</text>
+            <text class="meta-item">🏸 {{item.type === 'singles' ? '单打' : item.type === 'fixed-doubles' ? '双打固搭' : '双打轮转'}}</text>
           </view>
-          <view class="card-progress">
-            <progress 
-              percent="{{(item.current_players / item.max_players) * 100}}" 
-              stroke-width="6"
-              active
-              show-info
-              activeColor="#07c160"/>
+
+          <view class="progress-row">
+            <text class="progress-label">报名进度</text>
+            <text class="progress-count">{{item.current_players || 0}} / {{item.max_players}}</text>
           </view>
+
+          <progress
+            percent="{{(item.current_players / item.max_players) * 100}}"
+            stroke-width="8"
+            active
+            activeColor="#0ea56b"
+            backgroundColor="#dfe8e4"/>
         </view>
       </view>
     </view>

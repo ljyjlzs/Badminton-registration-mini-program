@@ -11,16 +11,16 @@
     "pages/challenge/challenge"
   ],
   "window": {
-    "backgroundTextStyle": "light",
-    "navigationBarBackgroundColor": "#07c160",
+    "backgroundTextStyle": "dark",
+    "navigationBarBackgroundColor": "#f5f8f7",
     "navigationBarTitleText": "羽毛球",
-    "navigationBarTextStyle": "white"
+    "navigationBarTextStyle": "black"
   },
   "tabBar": {
-    "color": "#999999",
-    "selectedColor": "#07c160",
-    "backgroundColor": "#ffffff",
-    "borderStyle": "white",
+    "color": "#73867f",
+    "selectedColor": "#0ea56b",
+    "backgroundColor": "#fbfcfc",
+    "borderStyle": "black",
     "list": [
       {
         "pagePath": "pages/index/index",
