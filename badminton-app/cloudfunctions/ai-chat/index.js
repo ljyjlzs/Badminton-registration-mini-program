@@ -253,11 +253,163 @@ async function buildUserContext(openid) {
     console.log('查询排名数据失败:', e.message);
   }
 
+  // 6. 比赛实时数据：进行中活动的比赛状态
+  try {
+    // 查找所有进行中的活动（playing / challenge / final）
+    const activeActResult = await db.collection('activities')
+      .where({ status: _.in(['playing', 'challenge', 'final']) })
+      .field({ _id: true, name: true, status: true, type: true })
+      .limit(20)
+      .get();
+    const activeActs = activeActResult.data || [];
+
+    if (activeActs.length > 0) {
+      // 筛选出我参与的活动
+      const myRegInActive = await db.collection('registrations')
+        .where({ user_id: openid, cancel_status: _.neq('approved'), activity_id: _.in(activeActs.map(a => a._id)) })
+        .limit(50)
+        .get();
+      const myActiveActIds = [...new Set((myRegInActive.data || []).map(r => r.activity_id))];
+
+      if (myActiveActIds.length > 0) {
+        // 查找我的队伍
+        const myTeams = await db.collection('teams')
+          .where({
+            activity_id: _.in(myActiveActIds),
+            members: openid,
+            is_eliminated: _.neq(true)
+          })
+          .limit(50)
+          .get();
+
+        const myTeamIds = (myTeams.data || []).map(t => t._id);
+
+        if (myTeamIds.length > 0) {
+          // 查找我的所有比赛（team1_id 或 team2_id 在我的队伍中）
+          // 小程序云数据库不支持 _.or，分两次查再合并
+          const matchResults1 = await db.collection('matches')
+            .where({
+              activity_id: _.in(myActiveActIds),
+              round: _.in(['group', 'challenge', 'final']),
+              team1_id: _.in(myTeamIds)
+            })
+            .orderBy('round_order', 'asc')
+            .limit(100)
+            .get();
+          const matchResults2 = await db.collection('matches')
+            .where({
+              activity_id: _.in(myActiveActIds),
+              round: _.in(['group', 'challenge', 'final']),
+              team2_id: _.in(myTeamIds)
+            })
+            .orderBy('round_order', 'asc')
+            .limit(100)
+            .get();
+
+          // 合并去重
+          const matchSet = new Set();
+          const matches = [];
+          [...(matchResults1.data || []), ...(matchResults2.data || [])].forEach(m => {
+            if (!matchSet.has(m._id)) {
+              matchSet.add(m._id);
+              matches.push(m);
+            }
+          });
+          if (matches.length > 0) {
+            // 按活动分组
+            const actNameMap2 = {};
+            activeActs.forEach(a => { actNameMap2[a._id] = (a.name || '未命名') + '(' + (statusMap[a.status] || a.status) + ')'; });
+
+            // 收集所有涉及的队伍
+            const opponentTeamIds = [...new Set([
+              ...matches.filter(m => !myTeamIds.includes(m.team1_id)).map(m => m.team1_id),
+              ...matches.filter(m => !myTeamIds.includes(m.team2_id)).map(m => m.team2_id)
+            ])];
+            const allTeamIds = [...new Set([...myTeamIds, ...opponentTeamIds])];
+
+            // 批量查队伍
+            const allTeams = await db.collection('teams')
+              .where({ _id: _.in(allTeamIds) })
+              .limit(100)
+              .get();
+
+            // 批量查队员昵称：一次查所有相关活动中的 registrations
+            const allTeamMembers = [...new Set(
+              (allTeams.data || []).flatMap(t => t.members || [])
+            )];
+            let globalNickMap = {};
+            if (allTeamMembers.length > 0) {
+              const allRegs = await db.collection('registrations')
+                .where({ activity_id: _.in(myActiveActIds), user_id: _.in(allTeamMembers) })
+                .field({ user_id: true, nickname: true })
+                .limit(500)
+                .get();
+              (allRegs.data || []).forEach(r => {
+                globalNickMap[r.user_id] = r.nickname || '';
+              });
+            }
+
+            // 构建队伍名映射
+            const teamNameMap = {};
+            (allTeams.data || []).forEach(team => {
+              const nicks = (team.members || []).map(uid => globalNickMap[uid] || '?');
+              teamNameMap[team._id] = nicks.join('/');
+            });
+
+            const roundMap = { group: '小组赛', challenge: '挑战赛', final: '决赛' };
+
+            // 按活动分组
+            const actMatches = {};
+            matches.forEach(m => {
+              if (!actMatches[m.activity_id]) actMatches[m.activity_id] = [];
+              actMatches[m.activity_id].push(m);
+            });
+
+            lines.push('【我的比赛详情】');
+            for (const actId of Object.keys(actMatches)) {
+              lines.push('');
+              lines.push(actNameMap2[actId] + '：');
+
+              const played = actMatches[actId].filter(m => m.status === 'confirmed');
+              const pending = actMatches[actId].filter(m => m.status !== 'confirmed');
+
+              if (played.length > 0) {
+                lines.push('  已完成(' + played.length + '场)：');
+                played.forEach((m, i) => {
+                  const t1 = teamNameMap[m.team1_id] || '?';
+                  const t2 = teamNameMap[m.team2_id] || '?';
+                  const rd = roundMap[m.round] || m.round;
+                  lines.push('    ' + (i + 1) + '. [' + rd + '] ' + t1 + ' ' + (m.team1_score || 0) + ' : ' + (m.team2_score || 0) + ' ' + t2);
+                });
+              }
+
+              if (pending.length > 0) {
+                lines.push('  待进行(' + pending.length + '场)：');
+                pending.forEach((m, i) => {
+                  const t1 = teamNameMap[m.team1_id] || '?';
+                  const t2 = teamNameMap[m.team2_id] || '?';
+                  const rd = roundMap[m.round] || m.round;
+                  const st = m.status === 'playing' ? '(进行中)' : '(待开始)';
+                  lines.push('    ' + (i + 1) + '. [' + rd + '] ' + t1 + ' vs ' + t2 + ' ' + st);
+                });
+              }
+
+              lines.push('  共 ' + actMatches[actId].length + ' 场，已完成 ' + played.length + ' 场，剩余 ' + pending.length + ' 场');
+            }
+            lines.push('');
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.log('查询比赛实时数据失败:', e.message);
+  }
+
   let context = lines.join('\n');
 
-  // 控制长度不超过 3000 字
-  if (context.length > 3000) {
-    context = context.substring(0, 3000) + '\n...(数据过多，已截断)';
+  // 控制长度不超过 4000 字
+  if (context.length > 4000) {
+    context = context.substring(0, 4000) + '\n...(数据过多，已截断)';
   }
 
   return context;
