@@ -1,8 +1,12 @@
 /**
- * ai-chat 云函数 - AI 聊天（带用户数据上下文）
+ * ai-chat 云函数 - AI 聊天（带用户数据上下文 + Tool Call 操作确认）
  *
  * 调用小米 Mimo API（OpenAI 兼容格式）
  * 每次对话前自动查询用户相关数据作为上下文注入
+ *
+ * Tool Call 机制：
+ *   - AI 需要执行操作时，在回复末尾附加 __ACTION__ JSON 块
+ *   - 前端解析后弹出确认卡片，用户确认后把结果通过 action_result 入参反馈
  */
 
 const cloud = require('wx-server-sdk');
@@ -35,10 +39,27 @@ const typeMap = {
   'fixed-doubles': '双打固搭'
 };
 
-// 构建用户数据上下文
+// ============================================================
+// 构建用户数据上下文（同时返回活动列表供 AI 使用活动ID）
+// ============================================================
 async function buildUserContext(openid) {
   const lines = [];
-  lines.push('你是羽毛球活动管理小程序的AI助手。请根据以下用户数据回答问题、提供分析和建议。如果用户的问题与以下数据无关，正常回答即可。');
+  lines.push('你是羽毛球活动管理小程序的AI助手。请根据以下用户数据回答问题、提供分析和建议。');
+  lines.push('');
+  lines.push('【重要】当用户请求执行操作时（创建活动、参加活动、取消报名），你必须在回复的最末尾附加一个操作块，格式如下：');
+  lines.push('__ACTION__{"action":"create_activity","params":{"name":"活动名","time":"2026-05-10T09:00","location":"场地名","type":"singles"},"confirm_text":"确认创建活动「活动名」？"}__END__');
+  lines.push('');
+  lines.push('支持的操作类型：');
+  lines.push('1. create_activity - 创建活动，params: {name, time(ISO格式), location, type(singles/doubles/fixed-doubles)}');
+  lines.push('2. join_activity - 参加活动，params: {activityId, activityName}（需要用户自己填昵称/等级，仅需提供活动信息）');
+  lines.push('3. cancel_registration - 取消报名，params: {activityId, activityName}');
+  lines.push('');
+  lines.push('注意事项：');
+  lines.push('- 时间必须是未来的时间，ISO格式如 2026-05-10T09:00');
+  lines.push('- 参加活动和取消报名必须使用下方数据中真实的活动ID');
+  lines.push('- 只能为用户执行用户有权限的操作');
+  lines.push('- 如果信息不足，请先向用户确认完整信息，而不是生成操作块');
+  lines.push('- 操作块必须在回复的最末尾，不要在操作块后再有任何文字');
   lines.push('');
 
   // 1. 用户信息
@@ -65,7 +86,6 @@ async function buildUserContext(openid) {
     if (organized.length > 0) {
       lines.push('【我组织的活动】(' + organized.length + '个)');
       for (const act of organized) {
-        // 获取报名人数
         let regCount = 0;
         let maxCount = act.max_players || '?';
         try {
@@ -78,7 +98,7 @@ async function buildUserContext(openid) {
         const typeCn = typeMap[act.type] || act.type || '未知';
         const statusCn = statusMap[act.status] || act.status;
         const timeStr = act.time ? act.time.replace('T', ' ').substring(0, 16) : '时间待定';
-        lines.push((act.name || '未命名') + ' (' + typeCn + ', ' + timeStr + ', ' + statusCn + ', ' + regCount + '/' + maxCount + '人)');
+        lines.push('ID:' + act._id + ' - ' + (act.name || '未命名') + ' (' + typeCn + ', ' + timeStr + ', ' + statusCn + ', ' + regCount + '/' + maxCount + '人)');
       }
       lines.push('');
     }
@@ -119,7 +139,7 @@ async function buildUserContext(openid) {
           const typeCn = typeMap[act.type] || act.type || '未知';
           const statusCn = statusMap[act.status] || act.status;
           const timeStr = act.time ? act.time.replace('T', ' ').substring(0, 16) : '时间待定';
-          lines.push((act.name || '未命名') + ' (' + typeCn + ', ' + timeStr + ', ' + statusCn + ', ' + regCount + '/' + maxCount + '人)');
+          lines.push('ID:' + act._id + ' - ' + (act.name || '未命名') + ' (' + typeCn + ', ' + timeStr + ', ' + statusCn + ', ' + regCount + '/' + maxCount + '人)');
         }
         lines.push('');
       }
@@ -128,9 +148,36 @@ async function buildUserContext(openid) {
     console.log('查询参加活动失败:', e.message);
   }
 
-  // 4. 有比赛的活动 - 获取排名数据
+  // 4. 可报名的公开活动（报名中状态，不是我参加/组织的）
   try {
-    // 获取我参加或组织的所有活动ID
+    const pubResult = await db.collection('activities')
+      .where({ status: 'registering' })
+      .orderBy('created_at', 'desc')
+      .limit(20)
+      .get();
+    const pubActs = pubResult.data || [];
+    if (pubActs.length > 0) {
+      lines.push('【可报名的活动】(' + pubActs.length + '个)');
+      for (const act of pubActs) {
+        let regCount = 0;
+        try {
+          const regRes = await db.collection('registrations')
+            .where({ activity_id: act._id, cancel_status: _.neq('approved') })
+            .count();
+          regCount = regRes.total || 0;
+        } catch (e) { /* ignore */ }
+        const typeCn = typeMap[act.type] || act.type || '未知';
+        const timeStr = act.time ? act.time.replace('T', ' ').substring(0, 16) : '时间待定';
+        lines.push('ID:' + act._id + ' - ' + (act.name || '未命名') + ' (' + typeCn + ', ' + timeStr + ', ' + regCount + '/' + (act.max_players || '?') + '人)');
+      }
+      lines.push('');
+    }
+  } catch (e) {
+    console.log('查询公开活动失败:', e.message);
+  }
+
+  // 5. 活动排名数据
+  try {
     const orgResult2 = await db.collection('activities')
       .where({ organizer_id: openid })
       .field({ _id: true })
@@ -149,7 +196,6 @@ async function buildUserContext(openid) {
     ])];
 
     if (myActIds.length > 0) {
-      // 查找有积分记录的活动
       const scoresResult = await db.collection('scores')
         .where({ activity_id: _.in(myActIds) })
         .limit(500)
@@ -158,7 +204,6 @@ async function buildUserContext(openid) {
       const scores = scoresResult.data || [];
 
       if (scores.length > 0) {
-        // 按活动分组计算排名
         const actScoreMap = {};
         scores.forEach(s => {
           if (!actScoreMap[s.activity_id]) actScoreMap[s.activity_id] = {};
@@ -168,7 +213,6 @@ async function buildUserContext(openid) {
           actScoreMap[s.activity_id][s.user_id] += s.score_change;
         });
 
-        // 获取活动名称
         const actNameMap = {};
         const actDetailResult = await db.collection('activities')
           .where({ _id: _.in(Object.keys(actScoreMap)) })
@@ -179,19 +223,15 @@ async function buildUserContext(openid) {
           actNameMap[a._id] = a.name || '未命名';
         });
 
-        // 获取用户昵称
-        const allUserIds = [...new Set(scores.map(s => s.user_id))];
-        let nickMap = {};
-        if (allUserIds.length > 0) {
-          const regNickResult = await db.collection('registrations')
-            .where({ activity_id: _.in(Object.keys(actScoreMap)) })
-            .field({ user_id: true, nickname: true })
-            .limit(200)
-            .get();
-          (regNickResult.data || []).forEach(r => {
-            nickMap[r.user_id] = r.nickname || '';
-          });
-        }
+        const nickMap = {};
+        const regNickResult = await db.collection('registrations')
+          .where({ activity_id: _.in(Object.keys(actScoreMap)) })
+          .field({ user_id: true, nickname: true })
+          .limit(200)
+          .get();
+        (regNickResult.data || []).forEach(r => {
+          nickMap[r.user_id] = r.nickname || '';
+        });
 
         lines.push('【活动排名数据】');
         for (const actId of Object.keys(actScoreMap)) {
@@ -215,15 +255,17 @@ async function buildUserContext(openid) {
 
   let context = lines.join('\n');
 
-  // 控制长度不超过 2000 字
-  if (context.length > 2000) {
-    context = context.substring(0, 2000) + '\n...(数据过多，已截断)';
+  // 控制长度不超过 3000 字
+  if (context.length > 3000) {
+    context = context.substring(0, 3000) + '\n...(数据过多，已截断)';
   }
 
   return context;
 }
 
+// ============================================================
 // 调用小米 Mimo API
+// ============================================================
 function callMimoAPI(messages) {
   return new Promise((resolve, reject) => {
     if (!MIMO_API_KEY) {
@@ -276,36 +318,47 @@ function callMimoAPI(messages) {
   });
 }
 
+// ============================================================
+// 主入口
+// ============================================================
 exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
-  const { message } = event;
 
-  if (!message || !message.trim()) {
+  // action_result: 前端操作执行后把结果反馈给 AI
+  const { message, action_result } = event;
+
+  // 如果是 action_result 反馈（不是用户输入的消息）
+  const actualMessage = action_result
+    ? ('[系统通知] 操作执行结果：' + action_result)
+    : message;
+
+  if (!actualMessage || !actualMessage.trim()) {
     return { success: false, error: '消息内容不能为空' };
   }
 
   try {
-    // 1. 保存用户消息
+    // 1. 保存消息（action_result 用 system 角色，避免显示在对话中）
     await db.collection('ai_messages').add({
       data: {
         user_id: openid,
-        role: 'user',
-        content: message,
+        role: action_result ? 'system_feedback' : 'user',
+        content: actualMessage,
         created_at: db.serverDate()
       }
     });
 
-    // 2. 获取历史消息（最近10条）
+    // 2. 获取历史消息（最近12条，包含 system_feedback）
     const historyResult = await db.collection('ai_messages')
       .where({ user_id: openid })
       .orderBy('created_at', 'desc')
-      .limit(10)
+      .limit(12)
       .get();
 
     const history = (historyResult.data || []).reverse();
+    // system_feedback 转为 user 角色传给 AI（AI 需要知道操作结果）
     const apiMessages = history.map(m => ({
-      role: m.role,
+      role: m.role === 'system_feedback' ? 'user' : m.role,
       content: m.content
     }));
 
@@ -319,7 +372,7 @@ exports.main = async (event, context) => {
     // 4. 调用 AI API
     const aiReply = await callMimoAPI(apiMessages);
 
-    // 5. 保存 AI 回复
+    // 5. 保存 AI 回复（含 action block 原文，前端自行解析）
     await db.collection('ai_messages').add({
       data: {
         user_id: openid,

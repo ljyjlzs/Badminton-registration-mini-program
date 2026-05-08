@@ -15,14 +15,73 @@
     <view wx:if="{{loadingHistory}}" class="loading-tip">加载历史消息...</view>
     <view wx:if="{{!loadingHistory && messages.length === 0}}" class="empty-tip">
       <text class="empty-icon">🤖</text>
-      <text class="empty-text">你好！我是羽毛球助手，可以帮你分析活动数据、查看排名等。试试问我问题吧！</text>
+      <text class="empty-text">你好！我是羽毛球助手，可以帮你查看活动、分析数据，也可以帮你创建活动、报名活动等。试试问我问题吧！</text>
     </view>
-    <view wx:for="{{messages}}" wx:key="id" id="msg-{{index}}" class="msg-row {{item.role === 'user' ? 'msg-right' : 'msg-left'}}">
-      <view class="msg-bubble {{item.role === 'user' ? 'bubble-user' : 'bubble-ai'}}">
-        <text class="msg-text" user-select>{{item.content}}</text>
+
+    <view wx:for="{{messages}}" wx:key="_id" id="msg-{{index}}" class="msg-row {{item.role === 'user' ? 'msg-right' : 'msg-left'}}">
+      <!-- 普通消息气泡 -->
+      <view wx:if="{{item.displayContent}}" class="msg-bubble {{item.role === 'user' ? 'bubble-user' : 'bubble-ai'}}">
+        <text class="msg-text" user-select>{{item.displayContent}}</text>
       </view>
+
+      <!-- 操作确认卡片 -->
+      <view wx:if="{{item.hasAction}}" class="action-card action-card-{{item.actionStatus}}">
+        <!-- 卡片头部 -->
+        <view class="action-card-header">
+          <text class="action-icon">⚡</text>
+          <text class="action-title">{{item.actionData.confirm_text || 'AI 操作请求'}}</text>
+        </view>
+
+        <!-- 操作参数详情 -->
+        <view class="action-params" wx:if="{{item.actionStatus === 'pending'}}">
+          <view wx:if="{{item.actionData.action === 'create_activity'}}">
+            <view class="param-row"><text class="param-label">名称</text><text class="param-value">{{item.actionData.params.name}}</text></view>
+            <view class="param-row"><text class="param-label">时间</text><text class="param-value">{{item.actionData.params.time}}</text></view>
+            <view class="param-row"><text class="param-label">地点</text><text class="param-value">{{item.actionData.params.location}}</text></view>
+            <view class="param-row"><text class="param-label">类型</text><text class="param-value">{{item.actionData.params.type === 'singles' ? '单打' : (item.actionData.params.type === 'fixed-doubles' ? '双打固搭' : '双打轮换')}}</text></view>
+          </view>
+          <view wx:elif="{{item.actionData.action === 'join_activity'}}">
+            <view class="param-row"><text class="param-label">活动</text><text class="param-value">{{item.actionData.params.activityName}}</text></view>
+          </view>
+          <view wx:elif="{{item.actionData.action === 'cancel_registration'}}">
+            <view class="param-row"><text class="param-label">活动</text><text class="param-value">{{item.actionData.params.activityName}}</text></view>
+          </view>
+        </view>
+
+        <!-- 执行中 -->
+        <view wx:if="{{item.actionStatus === 'executing'}}" class="action-status-row">
+          <text class="action-status-icon">⏳</text>
+          <text class="action-status-text">执行中...</text>
+        </view>
+
+        <!-- 成功 -->
+        <view wx:if="{{item.actionStatus === 'success'}}" class="action-status-row action-status-success">
+          <text class="action-status-icon">✅</text>
+          <text class="action-status-text">{{item.actionResultText || '操作成功'}}</text>
+        </view>
+
+        <!-- 失败 -->
+        <view wx:if="{{item.actionStatus === 'error'}}" class="action-status-row action-status-error">
+          <text class="action-status-icon">❌</text>
+          <text class="action-status-text">{{item.actionResultText || '操作失败'}}</text>
+        </view>
+
+        <!-- 已取消 -->
+        <view wx:if="{{item.actionStatus === 'cancelled'}}" class="action-status-row action-status-cancelled">
+          <text class="action-status-icon">🚫</text>
+          <text class="action-status-text">操作已取消</text>
+        </view>
+
+        <!-- 确认/取消按钮（仅 pending 状态显示）-->
+        <view wx:if="{{item.actionStatus === 'pending'}}" class="action-btns">
+          <view class="action-btn-cancel" bindtap="onCancelAction" data-index="{{index}}">取消</view>
+          <view class="action-btn-confirm" bindtap="onConfirmAction" data-index="{{index}}">确认执行</view>
+        </view>
+      </view>
+
       <view class="msg-time">{{item.timeStr}}</view>
     </view>
+
     <view wx:if="{{loading}}" class="loading-tip">AI 思考中...</view>
     <view id="msg-bottom-" style="height:1rpx;"></view>
   </scroll-view>

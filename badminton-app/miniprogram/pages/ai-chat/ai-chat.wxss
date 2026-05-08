@@ -114,6 +114,151 @@
   margin-top: 6rpx;
 }
 
+/* ============ 操作确认卡片 ============ */
+.action-card {
+  width: 88%;
+  margin: 8rpx 0;
+  background: #ffffff;
+  border-radius: 20rpx;
+  padding: 24rpx 28rpx;
+  box-shadow: 0 2rpx 16rpx rgba(0,0,0,0.10);
+  border-left: 6rpx solid #ff9800;
+}
+
+/* 成功状态 */
+.action-card-success {
+  border-left-color: #07c160;
+}
+
+/* 失败状态 */
+.action-card-error {
+  border-left-color: #e74c3c;
+}
+
+/* 取消状态 */
+.action-card-cancelled {
+  border-left-color: #999;
+  opacity: 0.7;
+}
+
+/* 执行中状态 */
+.action-card-executing {
+  border-left-color: #1890ff;
+}
+
+/* 卡片头部 */
+.action-card-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.action-icon {
+  font-size: 32rpx;
+  margin-right: 12rpx;
+}
+
+.action-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+  flex: 1;
+  line-height: 1.4;
+}
+
+/* 参数详情 */
+.action-params {
+  margin-bottom: 20rpx;
+  background: #f8f8f8;
+  border-radius: 12rpx;
+  padding: 16rpx 20rpx;
+}
+
+.param-row {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 10rpx;
+}
+
+.param-row:last-child {
+  margin-bottom: 0;
+}
+
+.param-label {
+  font-size: 24rpx;
+  color: #999;
+  width: 80rpx;
+  flex-shrink: 0;
+}
+
+.param-value {
+  font-size: 24rpx;
+  color: #333;
+  flex: 1;
+  line-height: 1.5;
+}
+
+/* 状态行 */
+.action-status-row {
+  display: flex;
+  align-items: center;
+  padding: 12rpx 0;
+}
+
+.action-status-icon {
+  font-size: 28rpx;
+  margin-right: 10rpx;
+}
+
+.action-status-text {
+  font-size: 26rpx;
+  color: #555;
+  flex: 1;
+  line-height: 1.5;
+}
+
+.action-status-success .action-status-text {
+  color: #07c160;
+}
+
+.action-status-error .action-status-text {
+  color: #e74c3c;
+}
+
+.action-status-cancelled .action-status-text {
+  color: #999;
+}
+
+/* 确认/取消按钮 */
+.action-btns {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 20rpx;
+}
+
+.action-btn-cancel {
+  flex: 1;
+  height: 68rpx;
+  line-height: 68rpx;
+  text-align: center;
+  border-radius: 34rpx;
+  font-size: 28rpx;
+  color: #666;
+  background: #f0f0f0;
+}
+
+.action-btn-confirm {
+  flex: 2;
+  height: 68rpx;
+  line-height: 68rpx;
+  text-align: center;
+  border-radius: 34rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #07c160, #06a84e);
+}
+
 /* ============ 底部输入栏 ============ */
 .input-bar {
   display: flex;
