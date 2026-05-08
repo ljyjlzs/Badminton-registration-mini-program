@@ -12,6 +12,8 @@ Page({
      pendingCancelCount: 0,
      loading: true,
      showLevelPicker: false,
+     showCancelModal: false,
+     cancelModalItem: null,
      selectedLevel: 5,
     inputNickname: '',
     inputAvatar: '',
@@ -794,7 +796,7 @@ Page({
     const registrationId = e.currentTarget.dataset.id;
     const action = e.currentTarget.dataset.action;
     const actionText = action === 'approve' ? '同意' : '拒绝';
-    
+
     wx.showModal({
       title: `${actionText}取消报名`,
       content: `确定${actionText}该用户的取消报名请求吗？`,
@@ -822,6 +824,50 @@ Page({
             }
           });
         }
+      }
+    });
+  },
+
+  onRegItemTap: function(e) {
+    const item = e.currentTarget.dataset.item;
+    if (!item || item.cancel_status !== 'pending' || !this.data.isOrganizer) return;
+
+    this.setData({
+      showCancelModal: true,
+      cancelModalItem: item
+    });
+  },
+
+  hideCancelModal: function() {
+    this.setData({ showCancelModal: false, cancelModalItem: null });
+  },
+
+  handleCancelFromModal: function(e) {
+    const action = e.currentTarget.dataset.action;
+    const item = this.data.cancelModalItem;
+    if (!item) return;
+
+    this.setData({ showCancelModal: false, cancelModalItem: null });
+
+    wx.showLoading({ title: '处理中...' });
+    wx.cloud.callFunction({
+      name: 'handle-cancel-request',
+      data: {
+        registrationId: item._id,
+        action: action
+      },
+      success: res => {
+        wx.hideLoading();
+        if (res.result && res.result.success) {
+          wx.showToast({ title: res.result.message || '处理成功', icon: 'success' });
+          this.loadActivityDetail();
+        } else {
+          wx.showToast({ title: res.result?.error || '操作失败', icon: 'none' });
+        }
+      },
+      fail: err => {
+        wx.hideLoading();
+        wx.showToast({ title: '操作失败', icon: 'none' });
       }
     });
   },

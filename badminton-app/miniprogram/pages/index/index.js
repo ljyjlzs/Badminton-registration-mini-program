@@ -84,13 +84,11 @@ Page({
           if (res.result) {
             const result = res.result;
             if (result.success && result.data) {
-              app.globalData.userInfo = {
+              app.saveLoginInfo({
                 ...result.data,
                 ...userInfo
-              };
-              app.globalData.openid = result.data.openid;
-              app.globalData.isLoggedIn = true;
-              
+              }, result.data.openid);
+
               this.setData({
                 isLoggedIn: true,
                 userInfo: app.globalData.userInfo

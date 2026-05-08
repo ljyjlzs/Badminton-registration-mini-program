@@ -36,10 +36,11 @@ exports.main = async (event, context) => {
     
     const activity = activityResult.data;
     
-    // 获取报名列表
+    // 获取报名列表（排除已取消的）
     const registrationsResult = await db.collection('registrations')
       .where({
-        activity_id: activityId
+        activity_id: activityId,
+        cancel_status: db.command.neq('approved')
       })
       .get();
 

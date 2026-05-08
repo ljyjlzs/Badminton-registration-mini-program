@@ -11,6 +11,31 @@ Page({
   },
 
   onShow: function() {
+    // 授权拦截：未登录则跳回首页
+    if (!app.globalData.isLoggedIn) {
+      wx.showModal({
+        title: '需要授权',
+        content: '请先在首页授权登录后使用AI功能',
+        showCancel: false,
+        success: () => {
+          wx.switchTab({ url: '/pages/index/index' });
+        }
+      });
+      return;
+    }
+    // 昵称拦截：未设置昵称则提示并跳回首页
+    const nickname = (app.globalData.userInfo && app.globalData.userInfo.nickname) || '';
+    if (!nickname) {
+      wx.showModal({
+        title: '需要设置昵称',
+        content: '请先在首页设置昵称后使用AI功能',
+        showCancel: false,
+        success: () => {
+          wx.switchTab({ url: '/pages/index/index' });
+        }
+      });
+      return;
+    }
     this.loadHistory();
   },
 
@@ -223,6 +248,16 @@ Page({
   // 执行：参加活动（需先获取用户信息）
   // ======================================================
   _doJoinActivity: function(idx, params) {
+    // 校验 activityId 格式（如果提供了 activityId）
+    const aid = params.activityId || '';
+    if (aid && /[\u4e00-\u9fff\s]/.test(aid)) {
+      this._finishAction(idx, false, '操作失败：activityId 格式错误，请让 AI 使用正确的活动ID（纯字母数字，如 a1b2c3）');
+      return;
+    }
+    if (!aid && !params.activityName) {
+      this._finishAction(idx, false, '操作失败：缺少活动ID和活动名称');
+      return;
+    }
     // 参加活动需要用户的昵称、等级、头像
     // 从 globalData 或数据库获取用户信息
     const userInfo = app.globalData && app.globalData.userInfo;
@@ -234,7 +269,8 @@ Page({
     wx.cloud.callFunction({
       name: 'join-activity',
       data: {
-        activityId: params.activityId,
+        activityId: params.activityId || '',
+        activityName: params.activityName || '',
         nickname: userInfo.nickname,
         level: userInfo.level || 5,
         avatar: userInfo.avatar || ('avatar_' + (userInfo.nickname || '?').charAt(0))
@@ -256,9 +292,22 @@ Page({
   // 执行：取消报名
   // ======================================================
   _doCancelRegistration: function(idx, params) {
+    // 校验 activityId 格式（如果提供了 activityId）
+    const aid = params.activityId || '';
+    if (aid && /[\u4e00-\u9fff\s]/.test(aid)) {
+      this._finishAction(idx, false, '操作失败：activityId 格式错误，请让 AI 使用正确的活动ID（纯字母数字，如 a1b2c3）');
+      return;
+    }
+    if (!aid && !params.activityName) {
+      this._finishAction(idx, false, '操作失败：缺少活动ID和活动名称');
+      return;
+    }
     wx.cloud.callFunction({
       name: 'cancel-registration',
-      data: { activityId: params.activityId },
+      data: {
+        activityId: params.activityId || '',
+        activityName: params.activityName || ''
+      },
       success: res => {
         if (res.result && res.result.success) {
           this._finishAction(idx, true, '已提交取消报名申请（活动：「' + params.activityName + '」），等待组织者审批。');

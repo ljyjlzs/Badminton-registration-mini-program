@@ -73,7 +73,8 @@ exports.main = async (event, context) => {
       try {
         const regResult = await db.collection('registrations')
           .where({
-            user_id: openid
+            user_id: openid,
+            cancel_status: db.command.neq('approved')
           })
           .limit(100)
           .get();

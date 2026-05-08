@@ -49,7 +49,7 @@ exports.main = async (event, context) => {
     const activityResult = await db.collection('activities').doc(registration.activity_id).get();
     const activity = activityResult.data;
     
-    if (!activity || activity._openid !== openid) {
+    if (!activity || activity.organizer_id !== openid) {
       return { success: false, error: '仅组织者可审批取消请求' };
     }
     

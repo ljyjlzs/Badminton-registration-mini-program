@@ -44,22 +44,52 @@ const typeMap = {
 // ============================================================
 async function buildUserContext(openid) {
   const lines = [];
-  lines.push('你是羽毛球活动管理小程序的AI助手。请根据以下用户数据回答问题、提供分析和建议。');
+  lines.push('你是羽毛球活动管理小程序的内置AI系统。你直接连接小程序后端，拥有操作权限。');
   lines.push('');
-  lines.push('【重要】当用户请求执行操作时（创建活动、参加活动、取消报名），你必须在回复的最末尾附加一个操作块，格式如下：');
-  lines.push('__ACTION__{"action":"create_activity","params":{"name":"活动名","time":"2026-05-10T09:00","location":"场地名","type":"singles"},"confirm_text":"确认创建活动「活动名」？"}__END__');
+  lines.push('## 操作指令（最高优先级，必须严格遵守）');
   lines.push('');
-  lines.push('支持的操作类型：');
-  lines.push('1. create_activity - 创建活动，params: {name, time(ISO格式), location, type(singles/doubles/fixed-doubles)}');
-  lines.push('2. join_activity - 参加活动，params: {activityId, activityName}（需要用户自己填昵称/等级，仅需提供活动信息）');
-  lines.push('3. cancel_registration - 取消报名，params: {activityId, activityName}');
+  lines.push('当用户要求"创建活动/报名/取消报名"或表达类似意图时，你必须在回复末尾输出操作块，前端会弹确认卡片让用户确认后自动执行。');
   lines.push('');
-  lines.push('注意事项：');
-  lines.push('- 时间必须是未来的时间，ISO格式如 2026-05-10T09:00');
-  lines.push('- 参加活动和取消报名必须使用下方数据中真实的活动ID');
-  lines.push('- 只能为用户执行用户有权限的操作');
-  lines.push('- 如果信息不足，请先向用户确认完整信息，而不是生成操作块');
-  lines.push('- 操作块必须在回复的最末尾，不要在操作块后再有任何文字');
+  lines.push('### 支持的操作');
+  lines.push('1. create_activity - 创建活动');
+  lines.push('   params: {name:"活动名", time:"2026-05-10T09:00", location:"场地名", type:"singles"}');
+  lines.push('   type可选: singles(单打) / doubles(双打轮换) / fixed-doubles(双打固搭)');
+  lines.push('');
+lines.push('2. join_activity - 参加活动');
+lines.push('   params: {activityId:"xxx", activityName:"活动名"}');
+lines.push('   重要: 从下方【可报名的活动】列表中复制 活动ID= 后面方括号内的字符串作为 activityId');
+lines.push('   例如列表显示 "活动ID=[abc123] 名称:周末羽毛球局"，则 activityId 填 "abc123"');
+lines.push('   如果你只有活动名称，把活动名填在 activityName 字段，activityId 可以留空字符串，系统会自动按名称查找');
+lines.push('   绝对禁止将活动名称填入 activityId 字段！');
+  lines.push('');
+lines.push('3. cancel_registration - 取消报名');
+lines.push('   params: {activityId:"xxx", activityName:"活动名"}');
+lines.push('   重要: 从下方【我参加的活动】列表中复制 活动ID= 后面方括号内的字符串作为 activityId');
+lines.push('   如果你只有活动名称，把活动名填在 activityName 字段，activityId 可以留空字符串，系统会自动按名称查找');
+lines.push('   绝对禁止将活动名称填入 activityId 字段！');
+  lines.push('');
+  lines.push('### 操作块格式（严格按此格式输出，不得修改标记符号）');
+  lines.push('回复文字...');
+  lines.push('__ACTION__{"action":"操作类型","params":{参数对象},"confirm_text":"确认操作的文字描述"}__END__');
+  lines.push('');
+  lines.push('### 正确示例');
+  lines.push('用户: 帮我创建一个周六上午的单打活动');
+  lines.push('AI: 好的，我帮你创建周六上午的单打活动。');
+  lines.push('__ACTION__{"action":"create_activity","params":{"name":"周六单打","time":"2026-05-10T09:00","location":"待定","type":"singles"},"confirm_text":"确认创建活动「周六单打」？"}__END__');
+  lines.push('');
+  lines.push('用户: 我想报名羽毛球双打活动');
+  lines.push('AI: 我找到以下可报名的活动：...');
+  lines.push('__ACTION__{"action":"join_activity","params":{"activityId":"a1b2c3d4e5","activityName":"周末双打"},"confirm_text":"确认报名参加活动「周末双打」？"}__END__');
+  lines.push('');
+lines.push('### 约束规则');
+lines.push('- 你有操作权限，绝对不能说"我无法操作""我不能创建""我只是AI助手"之类的话');
+lines.push('- activityId 必须是活动ID= 后面方括号[]内的纯字母数字串（如 a1b2c3d4e5），绝对禁止填活动名称');
+lines.push('- 如果你能从活动列表中找到 活动ID=[xxx]，就用 xxx 作为 activityId');
+lines.push('- 如果你只有活动名称无法找到ID，activityId 填空字符串 ""，把名称填在 activityName 中，系统会自动按名称匹配');
+lines.push('- 如果用户想报名/取消报名但活动列表中没有找到该活动，请直接告诉用户"当前没有找到可操作的活动"');
+lines.push('- 信息不足时先追问，信息齐全时立即生成操作块');
+lines.push('- 操作块必须在回复最末尾，后面不能再有文字');
+lines.push('- 时间必须是未来时间，ISO格式如 2026-05-10T09:00');
   lines.push('');
 
   // 1. 用户信息
@@ -74,7 +104,36 @@ async function buildUserContext(openid) {
     console.log('查询用户信息失败:', e.message);
   }
 
-  // 2. 我组织的活动
+  // 2. 可报名的公开活动（排在前面，确保不被截断）
+  try {
+    const pubResult = await db.collection('activities')
+      .where({ status: 'registering' })
+      .orderBy('created_at', 'desc')
+      .limit(20)
+      .get();
+    const pubActs = pubResult.data || [];
+    if (pubActs.length > 0) {
+      lines.push('【可报名的活动】(' + pubActs.length + '个)');
+      for (const act of pubActs) {
+        let regCount = 0;
+        try {
+          const regRes = await db.collection('registrations')
+            .where({ activity_id: act._id, cancel_status: _.neq('approved') })
+            .count();
+          regCount = regRes.total || 0;
+        } catch (e) { /* ignore */ }
+        const typeCn = typeMap[act.type] || act.type || '未知';
+        const timeStr = act.time ? act.time.replace('T', ' ').substring(0, 16) : '时间待定';
+        lines.push('- 活动ID: ' + act._id);
+        lines.push('  名称: ' + (act.name || '未命名') + '，类型: ' + typeCn + '，时间: ' + timeStr + '，报名: ' + regCount + '/' + (act.max_players || '?') + '人');
+      }
+      lines.push('');
+    }
+  } catch (e) {
+    console.log('查询公开活动失败:', e.message);
+  }
+
+  // 3. 我组织的活动
   try {
     const orgResult = await db.collection('activities')
       .where({ organizer_id: openid })
@@ -98,7 +157,7 @@ async function buildUserContext(openid) {
         const typeCn = typeMap[act.type] || act.type || '未知';
         const statusCn = statusMap[act.status] || act.status;
         const timeStr = act.time ? act.time.replace('T', ' ').substring(0, 16) : '时间待定';
-        lines.push('ID:' + act._id + ' - ' + (act.name || '未命名') + ' (' + typeCn + ', ' + timeStr + ', ' + statusCn + ', ' + regCount + '/' + maxCount + '人)');
+        lines.push('活动ID=[' + act._id + '] 名称:' + (act.name || '未命名') + ' (' + typeCn + ', ' + timeStr + ', ' + statusCn + ', ' + regCount + '/' + maxCount + '人)');
       }
       lines.push('');
     }
@@ -106,7 +165,7 @@ async function buildUserContext(openid) {
     console.log('查询组织活动失败:', e.message);
   }
 
-  // 3. 我参加的活动（排除我组织的）
+  // 4. 我参加的活动（排除我组织的）
   try {
     const regResult = await db.collection('registrations')
       .where({ user_id: openid, cancel_status: _.neq('approved') })
@@ -139,41 +198,13 @@ async function buildUserContext(openid) {
           const typeCn = typeMap[act.type] || act.type || '未知';
           const statusCn = statusMap[act.status] || act.status;
           const timeStr = act.time ? act.time.replace('T', ' ').substring(0, 16) : '时间待定';
-          lines.push('ID:' + act._id + ' - ' + (act.name || '未命名') + ' (' + typeCn + ', ' + timeStr + ', ' + statusCn + ', ' + regCount + '/' + maxCount + '人)');
+          lines.push('活动ID=[' + act._id + '] 名称:' + (act.name || '未命名') + ' (' + typeCn + ', ' + timeStr + ', ' + statusCn + ', ' + regCount + '/' + maxCount + '人)');
         }
         lines.push('');
       }
     }
   } catch (e) {
     console.log('查询参加活动失败:', e.message);
-  }
-
-  // 4. 可报名的公开活动（报名中状态，不是我参加/组织的）
-  try {
-    const pubResult = await db.collection('activities')
-      .where({ status: 'registering' })
-      .orderBy('created_at', 'desc')
-      .limit(20)
-      .get();
-    const pubActs = pubResult.data || [];
-    if (pubActs.length > 0) {
-      lines.push('【可报名的活动】(' + pubActs.length + '个)');
-      for (const act of pubActs) {
-        let regCount = 0;
-        try {
-          const regRes = await db.collection('registrations')
-            .where({ activity_id: act._id, cancel_status: _.neq('approved') })
-            .count();
-          regCount = regRes.total || 0;
-        } catch (e) { /* ignore */ }
-        const typeCn = typeMap[act.type] || act.type || '未知';
-        const timeStr = act.time ? act.time.replace('T', ' ').substring(0, 16) : '时间待定';
-        lines.push('ID:' + act._id + ' - ' + (act.name || '未命名') + ' (' + typeCn + ', ' + timeStr + ', ' + regCount + '/' + (act.max_players || '?') + '人)');
-      }
-      lines.push('');
-    }
-  } catch (e) {
-    console.log('查询公开活动失败:', e.message);
   }
 
   // 5. 活动排名数据
@@ -407,9 +438,9 @@ async function buildUserContext(openid) {
 
   let context = lines.join('\n');
 
-  // 控制长度不超过 4000 字
-  if (context.length > 4000) {
-    context = context.substring(0, 4000) + '\n...(数据过多，已截断)';
+  // 控制长度不超过 6000 字
+  if (context.length > 6000) {
+    context = context.substring(0, 6000) + '\n...(数据过多，已截断)';
   }
 
   return context;
@@ -476,6 +507,18 @@ function callMimoAPI(messages) {
 exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
+
+  // ============================================================
+  // TODO: 付费功能预留 - AI 使用权限校验
+  // 每个用户的 AI 功能需要付费后才能使用
+  // 实现方式（未来）：
+  //   1. 在 users 集合中增加字段：is_paid (Boolean) 或 paid_until (Date)
+  //   2. 在这里查询用户的付费状态
+  //   3. 如果未付费，返回：
+  //      return { success: false, error: 'AI功能需要开通后才能使用，请前往首页开通' };
+  //   4. 前端收到此错误后，引导用户跳转到付费开通页面
+  // 当前阶段：暂不启用，所有用户可免费使用
+  // ============================================================
 
   // action_result: 前端操作执行后把结果反馈给 AI
   const { message, action_result } = event;

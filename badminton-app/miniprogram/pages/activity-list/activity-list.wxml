@@ -37,7 +37,7 @@
         class="tab-item {{currentTab === 'search' ? 'active' : ''}}"
         data-tab="search"
         bindtap="switchTab">
-        查找活动
+        可参加
       </view>
     </view>
   </view>
@@ -162,13 +162,7 @@
         <text class="empty-desc">可以试试输入活动名称、地点，或者比赛类型。</text>
       </view>
 
-      <view wx:if="{{!searchLoading && !searchKeyword}}" class="empty-tip">
-        <text class="empty-icon">🔎</text>
-        <text class="empty-text">输入关键词开始搜索</text>
-        <text class="empty-desc">支持按活动名称、地点和比赛类型查找。</text>
-      </view>
-
-      <view wx:if="{{searchResults.length > 0}}" class="activity-list">
+      <view wx:if="{{!searchLoading && searchResults.length > 0}}" class="activity-list">
         <view
           wx:for="{{searchResults}}"
           wx:key="_id"

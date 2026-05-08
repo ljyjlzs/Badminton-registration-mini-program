@@ -69,23 +69,17 @@
       </view>
 
       <view class="registration-list">
-        <view wx:for="{{registrations}}" wx:key="_id" class="registration-item">
-          <view class="avatar-text">{{item.nickname && item.nickname.length > 0 ? item.nickname[0] : '?'}}</view>
-          <view class="reg-info">
-            <text class="nickname">{{item.nickname || '未知'}}</text>
-            <text wx:if="{{activity.type === 'fixed-doubles' && item.partner_id}}" class="partner-tag">搭档：{{item.partner_nickname || '已配对'}}</text>
+        <view wx:for="{{registrations}}" wx:key="_id" class="registration-item-wrap">
+          <view class="registration-item" bindtap="onRegItemTap" data-item="{{item}}">
+            <view class="avatar-text">{{item.nickname && item.nickname.length > 0 ? item.nickname[0] : '?'}}</view>
+            <view class="reg-info">
+              <text class="nickname">{{item.nickname || '未知'}}</text>
+              <text wx:if="{{activity.type === 'fixed-doubles' && item.partner_id}}" class="partner-tag">搭档：{{item.partner_nickname || '已配对'}}</text>
+            </view>
+            <view class="level-badge level-{{item.level || 5}}">Lv.{{item.level || 5}}</view>
+
+            <view wx:if="{{item.cancel_status === 'pending'}}" class="cancel-request-tag">取消中</view>
           </view>
-          <view class="level-badge level-{{item.level || 5}}">Lv.{{item.level || 5}}</view>
-
-          <view wx:if="{{item.cancel_status === 'pending'}}" class="cancel-request-tag">取消中</view>
-
-          <view wx:if="{{isOrganizer && item.cancel_status === 'pending'}}" class="cancel-actions">
-            <button class="btn-approve" bindtap="handleCancel" data-id="{{item._id}}" data-action="approve">同意</button>
-            <button class="btn-reject" bindtap="handleCancel" data-id="{{item._id}}" data-action="reject">拒绝</button>
-          </view>
-
-          <view wx:if="{{item.cancel_status === 'approved'}}" class="cancel-done-tag">已取消</view>
-          <view wx:if="{{item.cancel_status === 'rejected'}}" class="cancel-done-tag rejected">已拒绝</view>
         </view>
 
         <view wx:if="{{registrations.length === 0}}" class="empty-tip compact-empty">
@@ -124,7 +118,7 @@
             你已报名 (Lv.{{userRegistration.level}})
           </view>
           <button
-            wx:if="{{activity.status === 'registering' && !isOrganizer}}"
+            wx:if="{{activity.status === 'registering'}}"
             class="btn-cancel-reg"
             bindtap="cancelRegistration">
             取消报名
@@ -140,7 +134,7 @@
             你已报名 (Lv.{{userRegistration.level}})，点击可修改等级
           </view>
           <button
-            wx:if="{{activity.status === 'registering' && !isOrganizer}}"
+            wx:if="{{activity.status === 'registering'}}"
             class="btn-cancel-reg"
             bindtap="cancelRegistration">
             重新申请取消
@@ -300,6 +294,25 @@
       <button class="btn-ranking" bindtap="goToRanking">
         查看排名
       </button>
+    </view>
+  </view>
+
+  <!-- 取消报名审批弹窗 -->
+  <view wx:if="{{showCancelModal}}" class="picker-mask" bindtap="hideCancelModal">
+    <view class="cancel-modal-content" catchtap="stopPropagation">
+      <view class="cancel-modal-title">取消报名申请</view>
+      <view class="cancel-modal-info">
+        <view class="cancel-modal-avatar">{{cancelModalItem.nickname && cancelModalItem.nickname.length > 0 ? cancelModalItem.nickname[0] : '?'}}</view>
+        <view class="cancel-modal-detail">
+          <text class="cancel-modal-name">{{cancelModalItem.nickname || '未知'}}</text>
+          <text class="cancel-modal-level">Lv.{{cancelModalItem.level || 5}}</text>
+        </view>
+      </view>
+      <view class="cancel-modal-tip">该用户申请取消报名，是否同意？</view>
+      <view class="cancel-modal-btns">
+        <button class="cancel-modal-btn reject" bindtap="handleCancelFromModal" data-action="reject">拒绝</button>
+        <button class="cancel-modal-btn approve" bindtap="handleCancelFromModal" data-action="approve">同意取消</button>
+      </view>
     </view>
   </view>
 

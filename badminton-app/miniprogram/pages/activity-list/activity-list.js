@@ -12,6 +12,7 @@ Page({
   data: {
     myCreatedActivities: [],
     myJoinedActivities: [],
+    availableActivities: [],
     filteredCreatedActivities: [],
     filteredJoinedActivities: [],
     searchResults: [],
@@ -34,10 +35,24 @@ Page({
     const app = getApp();
     const targetTab = app.globalData.activityListTab || 'created';
     this.setData({ currentTab: targetTab });
-    this.loadActivities();
+    if (app.globalData.isLoggedIn) {
+      this.loadActivities();
+    }
   },
 
   onShow: function() {
+    // 授权拦截：未登录则跳回首页
+    if (!app.globalData.isLoggedIn) {
+      wx.showModal({
+        title: '需要授权',
+        content: '请先在首页授权登录后查看活动',
+        showCancel: false,
+        success: () => {
+          wx.switchTab({ url: '/pages/index/index' });
+        }
+      });
+      return;
+    }
     // 每次显示时刷新数据
     this.loadActivities();
   },
@@ -80,6 +95,21 @@ Page({
       }
     });
 
+    // 加载可参加的活动（用于查找活动tab）
+    wx.cloud.callFunction({
+      name: 'get-activities',
+      data: { type: 'available' },
+      success: res => {
+        if (res.result && res.result.success) {
+          this.setData({ availableActivities: res.result.data || [] });
+          // 如果当前在搜索tab且没有关键词，用可参加活动作为搜索结果
+          if (this.data.currentTab === 'search' && !this.data.searchKeyword) {
+            this.setData({ searchResults: res.result.data || [] });
+          }
+        }
+      }
+    });
+
     // 如果在搜索tab，重新搜索
     if (this.data.currentTab === 'search' && this.data.searchKeyword) {
       this.doCloudSearch();
@@ -90,9 +120,13 @@ Page({
     const tab = e.currentTarget.dataset.tab;
     this.setData({ currentTab: tab });
     
-    // 切到搜索tab时，如果有关键词就自动搜索
-    if (tab === 'search' && this.data.searchKeyword) {
-      this.doCloudSearch();
+    // 切到搜索tab时，有关键词就搜索，无关键词就显示全部可参加活动
+    if (tab === 'search') {
+      if (this.data.searchKeyword) {
+        this.doCloudSearch();
+      } else {
+        this.setData({ searchResults: this.data.availableActivities });
+      }
     } else {
       this.applyFilter();
     }
@@ -182,9 +216,9 @@ Page({
   },
 
   clearSearch: function() {
-    this.setData({ 
+    this.setData({
       searchKeyword: '',
-      searchResults: [],
+      searchResults: this.data.availableActivities,
       filteredCreatedActivities: this.data.myCreatedActivities,
       filteredJoinedActivities: this.data.myJoinedActivities
     });

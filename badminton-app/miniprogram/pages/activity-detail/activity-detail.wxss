@@ -617,53 +617,120 @@
   font-weight: 700;
 }
 
-.cancel-request-tag,
-.cancel-done-tag {
+.cancel-request-tag {
   font-size: 18rpx;
   padding: 4rpx 12rpx;
   border-radius: 999rpx;
   margin-top: 8rpx;
-}
-
-.cancel-request-tag {
   background: rgba(255, 243, 224, 0.96);
   color: #c98517;
 }
 
-.cancel-done-tag {
-  background: rgba(245, 245, 245, 0.96);
-  color: #8d9a95;
-}
-
-.cancel-done-tag.rejected {
-  background: rgba(255, 233, 241, 0.96);
-  color: #d34d89;
-}
-
+/* 审批按钮 - 已改为弹窗模式，保留旧样式兼容 */
 .cancel-actions {
-  display: flex;
-  gap: 10rpx;
-  margin-top: 8rpx;
-  width: 100%;
+  display: none;
 }
 
-.btn-approve,
-.btn-reject {
+.registration-item-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* 卡片可点击提示（仅"取消中"状态） */
+.registration-item.has-pending {
+  cursor: pointer;
+}
+
+/* 取消报名审批弹窗 */
+.cancel-modal-content {
+  width: 580rpx;
+  background: var(--surface-card, #ffffff);
+  border-radius: var(--radius-xl, 28rpx);
+  padding: 48rpx 40rpx 36rpx;
+  box-shadow: var(--shadow-lg, 0 12rpx 40rpx rgba(0,0,0,0.12));
+  text-align: center;
+}
+
+.cancel-modal-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: var(--text-primary, #12332b);
+  margin-bottom: 32rpx;
+}
+
+.cancel-modal-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20rpx;
+  margin-bottom: 24rpx;
+}
+
+.cancel-modal-avatar {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #ffffff;
+  background: var(--primary-gradient, linear-gradient(135deg, #0ea56b, #0bc278));
+}
+
+.cancel-modal-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.cancel-modal-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--text-primary, #12332b);
+}
+
+.cancel-modal-level {
+  font-size: 24rpx;
+  color: var(--text-tertiary, #8d9a95);
+  margin-top: 4rpx;
+}
+
+.cancel-modal-tip {
+  font-size: 26rpx;
+  color: var(--text-secondary, #4a5e56);
+  margin-bottom: 36rpx;
+  line-height: 1.6;
+}
+
+.cancel-modal-btns {
+  display: flex;
+  gap: 20rpx;
+}
+
+.cancel-modal-btn {
   flex: 1;
-  height: 52rpx;
-  line-height: 52rpx;
-  border-radius: 16rpx;
-  font-size: 22rpx;
+  height: 84rpx;
+  line-height: 84rpx;
+  border-radius: var(--radius-full, 999rpx);
+  font-size: 30rpx;
   font-weight: 700;
   border: none;
+  padding: 0;
+  min-height: 84rpx;
+  box-sizing: border-box;
 }
 
-.btn-approve {
-  background: linear-gradient(135deg, #4faf60 0%, #3a9b55 100%);
-  color: #ffffff;
+.cancel-modal-btn.reject {
+  background: var(--bg-gray, #f0f5f3);
+  color: var(--text-secondary, #4a5e56);
+  border: 1rpx solid var(--border-light, rgba(18,69,51,0.08));
 }
 
-.btn-reject {
-  background: rgba(244, 247, 246, 0.96);
-  color: var(--text-secondary);
+.cancel-modal-btn.approve {
+  background: var(--primary-gradient, linear-gradient(135deg, #0ea56b, #0bc278));
+  color: var(--text-inverse, #ffffff);
+  box-shadow: var(--shadow-primary, 0 6rpx 16rpx rgba(14,165,107,0.28));
 }
