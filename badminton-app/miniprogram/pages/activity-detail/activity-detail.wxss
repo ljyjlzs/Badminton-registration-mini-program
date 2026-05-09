@@ -171,6 +171,14 @@
   align-items: center;
 }
 
+.registration-item-wrap {
+  position: relative;
+}
+
+.registration-item-wrap:active .registration-item {
+  transform: scale(0.985);
+}
+
 .registration-item .avatar-text {
   width: 88rpx;
   height: 88rpx;
@@ -618,28 +626,47 @@
 }
 
 .cancel-request-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
   font-size: 18rpx;
-  padding: 4rpx 12rpx;
+  padding: 6rpx 12rpx;
   border-radius: 999rpx;
-  margin-top: 8rpx;
+  margin-top: 10rpx;
   background: rgba(255, 243, 224, 0.96);
   color: #c98517;
+  font-weight: 700;
 }
 
-/* 审批按钮 - 已改为弹窗模式，保留旧样式兼容 */
-.cancel-actions {
-  display: none;
+.cancel-request-tag::before {
+  content: '';
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  background: #d58c1b;
 }
 
-.registration-item-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+.registration-item-wrap.has-pending .registration-item {
+  background: linear-gradient(135deg, #fffaf1 0%, #fff3df 100%);
+  border-color: rgba(213, 140, 27, 0.16);
+  box-shadow: 0 10rpx 20rpx rgba(213, 140, 27, 0.08);
 }
 
-/* 卡片可点击提示（仅"取消中"状态） */
-.registration-item.has-pending {
-  cursor: pointer;
+.registration-item-wrap.has-pending .registration-item::after {
+  content: '待处理';
+  position: absolute;
+  top: 12rpx;
+  right: 12rpx;
+  padding: 4rpx 10rpx;
+  border-radius: 999rpx;
+  background: rgba(213, 140, 27, 0.12);
+  color: #c98517;
+  font-size: 18rpx;
+  font-weight: 700;
+}
+
+.registration-item {
+  position: relative;
 }
 
 /* 取消报名审批弹窗 */
@@ -703,6 +730,9 @@
   color: var(--text-secondary, #4a5e56);
   margin-bottom: 36rpx;
   line-height: 1.6;
+  padding: 18rpx 20rpx;
+  border-radius: 20rpx;
+  background: rgba(244, 247, 246, 0.96);
 }
 
 .cancel-modal-btns {
@@ -729,8 +759,16 @@
   border: 1rpx solid var(--border-light, rgba(18,69,51,0.08));
 }
 
+.cancel-modal-btn.reject:active {
+  transform: scale(0.985);
+}
+
 .cancel-modal-btn.approve {
   background: var(--primary-gradient, linear-gradient(135deg, #0ea56b, #0bc278));
   color: var(--text-inverse, #ffffff);
   box-shadow: var(--shadow-primary, 0 6rpx 16rpx rgba(14,165,107,0.28));
+}
+
+.cancel-modal-btn.approve:active {
+  transform: scale(0.985);
 }
