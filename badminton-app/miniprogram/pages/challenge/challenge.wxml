@@ -1,72 +1,95 @@
-<view class="container">
-  <view class="header">
-    <text class="title">挑战赛</text>
-    <text class="subtitle">淘汰者挑战晋级队</text>
-  </view>
-
-  <view wx:if="{{loading}}" class="loading">
-    <text>加载中...</text>
-  </view>
-
-  <view wx:if="{{!loading}}" class="content">
-    <!-- 晋级队 -->
-    <view class="section">
-      <view class="section-title">晋级队伍</view>
-      <view class="team-list">
-        <view wx:for="{{qualifiedTeams}}" wx:key="_id" class="qualified-team">
-          <view class="team-name">{{item.name || '晋级队'}}</view>
-          <view class="team-members">
-            <text wx:for="{{item.members}}" wx:key="*this" wx:for-item="member">
-              {{member && member.nickname ? member.nickname : '未知'}}{{index < (item.members.length - 1) ? ' / ' : ''}}
-            </text>
-          </view>
-          <view class="team-score">积分: {{item.groupScore || 0}}</view>
-        </view>
-      </view>
+<view class="challenge-page">
+  <view class="page-shell">
+    <view class="challenge-hero">
+      <view class="hero-badge">CHALLENGE ROUND</view>
+      <view class="hero-title">挑战赛</view>
+      <view class="hero-desc">淘汰选手自由组队，向晋级队伍发起最后冲击。</view>
     </view>
 
-    <!-- 淘汰者 -->
-    <view class="section">
-      <view class="section-title">淘汰选手（自由组队挑战）</view>
-      <view wx:if="{{eliminatedPlayers.length === 0}}" class="empty-tip">
-        暂无淘汰选手
-      </view>
-      <view wx:else class="player-grid">
-        <view 
-          wx:for="{{eliminatedPlayers}}" 
-          wx:key="userId"
-          class="player-card"
-          data-playerid="{{item.userId}}"
-          bindtap="formChallengeTeam">
-          <!-- 暂时禁用头像，统一显示首字母 -->
-          <!-- <image wx:if="{{item.avatar}}" class="player-avatar" src="{{item.avatar}}" mode="aspectFill"></image> -->
-          <view class="avatar-text">{{item.nickname && item.nickname.length > 0 ? item.nickname[0] : '?'}}</view>
-          <text class="nickname">{{item.nickname || '未知'}}</text>
-           <text class="level">Lv.{{item.level || 5}}</text>
-        </view>
-      </view>
+    <view wx:if="{{loading}}" class="loading challenge-loading">
+      <view class="loading-spinner"></view>
+      <text>加载中...</text>
     </view>
 
-    <!-- 挑战队 -->
-    <view wx:if="{{challengeMatch && qualifiedTeams && qualifiedTeams.length > 0}}" class="section challenge-ready">
-      <view class="section-title">挑战赛安排</view>
-      <view class="match-card">
-        <view class="match-teams">
-          <view class="team">
-            <text class="team-name">{{qualifiedTeams[0].name || '晋级队'}}</text>
-            <text class="team-members">晋级选手</text>
+    <view wx:if="{{!loading}}" class="challenge-content">
+      <view class="section challenge-section">
+        <view class="section-header">
+          <view>
+            <text class="section-title">晋级队伍</text>
+            <text class="section-caption">当前已经锁定晋级资格的队伍</text>
           </view>
-          <text class="vs">VS</text>
-          <view class="team">
-            <text class="team-name">挑战队</text>
-            <text class="team-members">淘汰者</text>
+        </view>
+
+        <view class="qualified-list">
+          <view wx:for="{{qualifiedTeams}}" wx:key="_id" class="qualified-card">
+            <view class="qualified-head">
+              <text class="qualified-name">{{item.name || '晋级队伍'}}</text>
+              <text class="qualified-score">积分 {{item.groupScore || 0}}</text>
+            </view>
+            <view class="qualified-members">
+              <text wx:for="{{item.members}}" wx:key="*this" wx:for-item="member">
+                {{member && member.nickname ? member.nickname : '未知'}}{{index < (item.members.length - 1) ? ' / ' : ''}}
+              </text>
+            </view>
           </view>
         </view>
       </view>
-      
-      <button class="btn-start" bindtap="startChallenge">
-        开始挑战赛
-      </button>
+
+      <view class="section challenge-section">
+        <view class="section-header">
+          <view>
+            <text class="section-title">淘汰选手</text>
+            <text class="section-caption">点击两名选手即可组建挑战队</text>
+          </view>
+        </view>
+
+        <view wx:if="{{eliminatedPlayers.length === 0}}" class="empty-tip compact-empty">
+          <text class="empty-icon">🏸</text>
+          <text class="empty-text">暂无可挑战选手</text>
+          <text class="empty-desc">当前没有淘汰选手可用于组建挑战队。</text>
+        </view>
+
+        <view wx:else class="player-grid">
+          <view
+            wx:for="{{eliminatedPlayers}}"
+            wx:key="userId"
+            class="player-card {{selectedPartner && selectedPartner.userId === item.userId ? 'selected' : ''}}"
+            data-playerid="{{item.userId}}"
+            bindtap="formChallengeTeam">
+            <view class="avatar-text player-avatar">{{item.nickname && item.nickname.length > 0 ? item.nickname[0] : '?'}}</view>
+            <text class="player-name">{{item.nickname || '未知'}}</text>
+            <text class="player-level">Lv.{{item.level || 5}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view wx:if="{{challengeMatch && qualifiedTeams && qualifiedTeams.length > 0}}" class="section challenge-section challenge-ready">
+        <view class="section-header">
+          <view>
+            <text class="section-title">挑战赛安排</text>
+            <text class="section-caption">挑战队已就绪，可以直接进入比赛</text>
+          </view>
+        </view>
+
+        <view class="match-preview card-gradient">
+          <view class="preview-label">READY TO START</view>
+          <view class="match-teams">
+            <view class="preview-team">
+              <text class="preview-team-name">{{qualifiedTeams[0].name || '晋级队'}}</text>
+              <text class="preview-team-meta">晋级选手</text>
+            </view>
+            <text class="preview-vs">VS</text>
+            <view class="preview-team">
+              <text class="preview-team-name">挑战队</text>
+              <text class="preview-team-meta">淘汰选手</text>
+            </view>
+          </view>
+        </view>
+
+        <button class="btn-start" bindtap="startChallenge">
+          开始挑战赛
+        </button>
+      </view>
     </view>
   </view>
 </view>

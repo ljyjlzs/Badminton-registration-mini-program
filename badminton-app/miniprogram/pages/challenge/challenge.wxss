@@ -1,194 +1,237 @@
-.container {
+.challenge-page {
   min-height: 100vh;
-  background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
-  padding-bottom: 40rpx;
 }
 
-.header {
-  text-align: center;
-  padding: 60rpx 40rpx 40rpx;
-  color: #fff;
+.challenge-hero {
+  padding: 18rpx 4rpx 26rpx;
 }
 
-.title {
-  display: block;
+.hero-badge {
+  display: inline-flex;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  background: rgba(214, 79, 138, 0.12);
+  color: #c73472;
+  font-size: 20rpx;
+  font-weight: 700;
+  letter-spacing: 4rpx;
+  margin-bottom: 18rpx;
+}
+
+.hero-title {
   font-size: 48rpx;
-  font-weight: bold;
-  margin-bottom: 12rpx;
+  line-height: 1.18;
+  color: var(--text-primary);
+  font-weight: 800;
+  margin-bottom: 10rpx;
 }
 
-.subtitle {
-  font-size: 28rpx;
-  opacity: 0.8;
+.hero-desc {
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: var(--text-secondary);
 }
 
-.loading {
+.challenge-loading {
+  min-height: 320rpx;
+}
+
+.challenge-content {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 100rpx 0;
-  color: #fff;
+  flex-direction: column;
+  gap: 24rpx;
 }
 
-.content {
-  padding: 20rpx;
+.challenge-section {
+  background: rgba(255, 255, 255, 0.96);
+  padding: 30rpx 26rpx;
+  border-radius: 30rpx;
+  border: 1rpx solid rgba(18, 69, 51, 0.06);
+  box-shadow: var(--shadow-card);
 }
 
-.section {
-  background-color: #fff;
-  border-radius: 16rpx;
-  padding: 30rpx;
-  margin-bottom: 20rpx;
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 22rpx;
 }
 
 .section-title {
+  display: block;
   font-size: 32rpx;
-  font-weight: bold;
-  color: #333;
-  margin-bottom: 20rpx;
+  line-height: 1.3;
+  color: var(--text-primary);
+  font-weight: 700;
 }
 
-.team-list {
+.section-caption {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: var(--text-tertiary);
+}
+
+.qualified-list {
   display: flex;
   flex-direction: column;
   gap: 16rpx;
 }
 
-.qualified-team {
-  background-color: #e8f5e9;
-  border-radius: 12rpx;
-  padding: 20rpx;
+.qualified-card {
+  padding: 22rpx 20rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(135deg, #f8fcfa 0%, #eff6f2 100%);
+  border: 1rpx solid rgba(18, 69, 51, 0.05);
 }
 
-.team-name {
+.qualified-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 10rpx;
+}
+
+.qualified-name {
   font-size: 30rpx;
-  font-weight: bold;
-  color: #388e3c;
-  margin-bottom: 8rpx;
+  color: var(--text-primary);
+  font-weight: 700;
 }
 
-.team-members {
-  font-size: 26rpx;
-  color: #666;
-  margin-bottom: 8rpx;
+.qualified-score {
+  font-size: 22rpx;
+  color: var(--primary-dark);
+  font-weight: 700;
+  padding: 8rpx 14rpx;
+  border-radius: 999rpx;
+  background: rgba(14, 165, 107, 0.1);
 }
 
-.team-score {
-  font-size: 24rpx;
-  color: #07c160;
-}
-
-.empty-tip {
-  text-align: center;
-  color: #999;
-  padding: 40rpx 0;
+.qualified-members {
+  font-size: 25rpx;
+  line-height: 1.7;
+  color: var(--text-secondary);
 }
 
 .player-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 20rpx;
+  gap: 16rpx;
 }
 
 .player-card {
-  width: 150rpx;
+  width: 158rpx;
+  padding: 20rpx 14rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(135deg, #fff7f2 0%, #fff0e5 100%);
+  border: 1rpx solid rgba(242, 139, 30, 0.12);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20rpx;
-  background-color: #fff3e0;
-  border-radius: 12rpx;
 }
 
-.player-card:active {
-  background-color: #ffe0b2;
+.player-card.selected {
+  background: linear-gradient(135deg, #fff0f7 0%, #ffe3ef 100%);
+  border-color: rgba(214, 79, 138, 0.2);
+  box-shadow: 0 12rpx 24rpx rgba(214, 79, 138, 0.12);
 }
 
-.player-card .avatar,
-.player-card .avatar-text,
 .player-avatar {
-  width: 80rpx;
-  height: 80rpx;
+  width: 84rpx;
+  height: 84rpx;
+  margin-bottom: 14rpx;
   border-radius: 50%;
-  margin-bottom: 12rpx;
+  background: linear-gradient(135deg, #f6a53b 0%, #ee8f1d 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32rpx;
-  font-weight: bold;
-  color: #fff;
-  background-color: #ff9800;
-  overflow: hidden;
+  color: #ffffff;
+  font-size: 34rpx;
+  font-weight: 700;
 }
 
-.player-avatar image {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
+.compact-empty {
+  padding: 48rpx 20rpx;
 }
 
-.player-card .nickname {
-  font-size: 26rpx;
-  color: #333;
-  text-align: center;
-  max-width: 130rpx;
+.player-name {
+  font-size: 25rpx;
+  color: var(--text-primary);
+  font-weight: 600;
+  max-width: 120rpx;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.player-card .level {
+.player-level {
+  margin-top: 6rpx;
   font-size: 22rpx;
-  color: #ff9800;
+  color: #d67c13;
 }
 
 .challenge-ready {
-  background: linear-gradient(135deg, #fff9c4 0%, #fff59d 100%);
+  background: linear-gradient(135deg, #fff8fb 0%, #fff1f7 100%);
+  border-color: rgba(214, 79, 138, 0.14);
 }
 
-.match-card {
-  padding: 30rpx;
-  background-color: #fff;
-  border-radius: 12rpx;
+.match-preview {
+  padding: 30rpx 26rpx;
+  margin-bottom: 22rpx;
+}
+
+.preview-label {
+  font-size: 20rpx;
+  letter-spacing: 4rpx;
+  color: rgba(255, 255, 255, 0.68);
   margin-bottom: 20rpx;
 }
 
 .match-teams {
   display: flex;
-  justify-content: space-around;
   align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
 }
 
-.match-teams .team {
+.preview-team {
+  flex: 1;
   text-align: center;
 }
 
-.match-teams .team-name {
+.preview-team-name {
+  display: block;
   font-size: 32rpx;
-  font-weight: bold;
-  color: #333;
+  line-height: 1.3;
+  color: #ffffff;
+  font-weight: 800;
   margin-bottom: 8rpx;
 }
 
-.match-teams .team-members {
+.preview-team-meta {
+  display: block;
   font-size: 24rpx;
-  color: #666;
+  color: rgba(255, 255, 255, 0.8);
 }
 
-.vs {
-  font-size: 48rpx;
-  font-weight: bold;
-  color: #ff9800;
+.preview-vs {
+  font-size: 42rpx;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 900;
 }
 
 .btn-start {
   width: 100%;
-  height: 96rpx;
-  line-height: 96rpx;
-  background-color: #ff9800;
-  color: #fff;
-  font-size: 32rpx;
-  font-weight: bold;
-  border-radius: 48rpx;
+  height: 92rpx;
+  line-height: 92rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #eb4f8f 0%, #da3a76 100%);
+  color: #ffffff;
   border: none;
+  font-size: 30rpx;
+  font-weight: 700;
+  box-shadow: 0 12rpx 24rpx rgba(218, 58, 118, 0.22);
 }
