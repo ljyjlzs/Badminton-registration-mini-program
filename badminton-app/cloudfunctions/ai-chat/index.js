@@ -17,7 +17,7 @@ cloud.init({
 });
 
 // 小米 Mimo API Key
-const MIMO_API_KEY = 'tp-co74cqsnatfrgd035fkkvg1ghwe4an1mrtr81d529lq06v8j';
+const MIMO_API_KEY = 'tp-c8yy59jtcd38ksv6hicz0yq0mofymzxlijbhqxg68gnanpld';
 
 const db = cloud.database();
 const _ = db.command;
