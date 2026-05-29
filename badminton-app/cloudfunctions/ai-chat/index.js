@@ -57,14 +57,18 @@ async function buildUserContext(openid) {
   lines.push('');
 lines.push('2. join_activity - 参加活动');
 lines.push('   params: {activityId:"xxx", activityName:"活动名"}');
-lines.push('   重要: 从下方【可报名的活动】列表中复制 活动ID= 后面方括号内的字符串作为 activityId');
-lines.push('   例如列表显示 "活动ID=[abc123] 名称:周末羽毛球局"，则 activityId 填 "abc123"');
-lines.push('   如果你只有活动名称，把活动名填在 activityName 字段，activityId 可以留空字符串，系统会自动按名称查找');
+lines.push('   重要: 从下方【可报名的活动】列表中复制"活动ID:"后面的字符串作为 activityId');
 lines.push('   绝对禁止将活动名称填入 activityId 字段！');
+lines.push('   【模糊查询报名流程】当用户说"帮我报名xxx的局"或类似模糊描述时：');
+lines.push('   步骤1: 在【可报名的活动】列表中，用用户的关键词同时匹配"名称""地点""组织者"三个字段（不区分大小写，支持部分匹配）');
+lines.push('   步骤2: 如果匹配到0个 → 回复"当前没有找到符合「xxx」的可报名活动"，列出所有可报名活动供用户参考');
+lines.push('   步骤3: 如果匹配到1个 → 直接告知用户找到了哪个活动，并输出 join_activity 操作块（用该活动的 activityId）');
+lines.push('   步骤4: 如果匹配到多个 → 列出所有匹配的活动（编号+名称+时间+地点+组织者），让用户选择几号，不要输出操作块');
+lines.push('   步骤5: 用户回复选几号后 → 输出对应活动的 join_activity 操作块');
   lines.push('');
 lines.push('3. cancel_registration - 取消报名');
 lines.push('   params: {activityId:"xxx", activityName:"活动名"}');
-lines.push('   重要: 从下方【我参加的活动】列表中复制 活动ID= 后面方括号内的字符串作为 activityId');
+lines.push('   重要: 从下方【我参加的活动】列表中复制"活动ID:"后面的字符串作为 activityId');
 lines.push('   如果你只有活动名称，把活动名填在 activityName 字段，activityId 可以留空字符串，系统会自动按名称查找');
 lines.push('   绝对禁止将活动名称填入 activityId 字段！');
   lines.push('');
@@ -83,10 +87,10 @@ lines.push('   绝对禁止将活动名称填入 activityId 字段！');
   lines.push('');
 lines.push('### 约束规则');
 lines.push('- 你有操作权限，绝对不能说"我无法操作""我不能创建""我只是AI助手"之类的话');
-lines.push('- activityId 必须是活动ID= 后面方括号[]内的纯字母数字串（如 a1b2c3d4e5），绝对禁止填活动名称');
-lines.push('- 如果你能从活动列表中找到 活动ID=[xxx]，就用 xxx 作为 activityId');
-lines.push('- 如果你只有活动名称无法找到ID，activityId 填空字符串 ""，把名称填在 activityName 中，系统会自动按名称匹配');
-lines.push('- 如果用户想报名/取消报名但活动列表中没有找到该活动，请直接告诉用户"当前没有找到可操作的活动"');
+lines.push('- activityId 必须是"活动ID:"后面的纯字母数字串，绝对禁止填活动名称');
+lines.push('- 模糊报名时，先搜索匹配，匹配多个时列出让用户选择，用户选定后再生成操作块');
+lines.push('- 如果用户只有活动名称无法找到ID，activityId 填空字符串 ""，把名称填在 activityName 中');
+lines.push('- 如果可报名活动列表为空，直接告诉用户"当前没有可报名的活动"');
 lines.push('- 信息不足时先追问，信息齐全时立即生成操作块');
 lines.push('- 操作块必须在回复最末尾，后面不能再有文字');
 lines.push('- 时间必须是未来时间，ISO格式如 2026-05-10T09:00');
@@ -113,6 +117,21 @@ lines.push('- 时间必须是未来时间，ISO格式如 2026-05-10T09:00');
       .get();
     const pubActs = pubResult.data || [];
     if (pubActs.length > 0) {
+      // 批量查询组织者名字
+      const organizerIds = [...new Set(pubActs.map(a => a.organizer_id).filter(Boolean))];
+      const organizerNameMap = {};
+      if (organizerIds.length > 0) {
+        try {
+          const orgUsers = await db.collection('users')
+            .where({ _openid: db.command.in(organizerIds) })
+            .field({ _openid: true, nickname: true })
+            .get();
+          (orgUsers.data || []).forEach(u => {
+            organizerNameMap[u._openid] = u.nickname || '未知';
+          });
+        } catch (e) { /* ignore */ }
+      }
+
       lines.push('【可报名的活动】(' + pubActs.length + '个)');
       for (const act of pubActs) {
         let regCount = 0;
@@ -124,9 +143,13 @@ lines.push('- 时间必须是未来时间，ISO格式如 2026-05-10T09:00');
         } catch (e) { /* ignore */ }
         const typeCn = typeMap[act.type] || act.type || '未知';
         const timeStr = act.time ? act.time.replace('T', ' ').substring(0, 16) : '时间待定';
+        const organizerName = organizerNameMap[act.organizer_id] || '未知';
         lines.push('- 活动ID: ' + act._id);
-        lines.push('  名称: ' + (act.name || '未命名') + '，类型: ' + typeCn + '，时间: ' + timeStr + '，报名: ' + regCount + '/' + (act.max_players || '?') + '人');
+        lines.push('  名称: ' + (act.name || '未命名') + '，类型: ' + typeCn + '，时间: ' + timeStr + '，地点: ' + (act.location || '未知') + '，组织者: ' + organizerName + '，报名: ' + regCount + '/' + (act.max_players || '?') + '人');
       }
+      lines.push('');
+    } else {
+      lines.push('【可报名的活动】当前无可报名活动');
       lines.push('');
     }
   } catch (e) {
@@ -157,7 +180,8 @@ lines.push('- 时间必须是未来时间，ISO格式如 2026-05-10T09:00');
         const typeCn = typeMap[act.type] || act.type || '未知';
         const statusCn = statusMap[act.status] || act.status;
         const timeStr = act.time ? act.time.replace('T', ' ').substring(0, 16) : '时间待定';
-        lines.push('活动ID=[' + act._id + '] 名称:' + (act.name || '未命名') + ' (' + typeCn + ', ' + timeStr + ', ' + statusCn + ', ' + regCount + '/' + maxCount + '人)');
+        lines.push('- 活动ID: ' + act._id);
+        lines.push('  名称: ' + (act.name || '未命名') + '，类型: ' + typeCn + '，时间: ' + timeStr + '，地点: ' + (act.location || '未知') + '，状态: ' + statusCn + '，报名: ' + regCount + '/' + maxCount + '人');
       }
       lines.push('');
     }
@@ -198,7 +222,8 @@ lines.push('- 时间必须是未来时间，ISO格式如 2026-05-10T09:00');
           const typeCn = typeMap[act.type] || act.type || '未知';
           const statusCn = statusMap[act.status] || act.status;
           const timeStr = act.time ? act.time.replace('T', ' ').substring(0, 16) : '时间待定';
-          lines.push('活动ID=[' + act._id + '] 名称:' + (act.name || '未命名') + ' (' + typeCn + ', ' + timeStr + ', ' + statusCn + ', ' + regCount + '/' + maxCount + '人)');
+          lines.push('- 活动ID: ' + act._id);
+          lines.push('  名称: ' + (act.name || '未命名') + '，类型: ' + typeCn + '，时间: ' + timeStr + '，地点: ' + (act.location || '未知') + '，状态: ' + statusCn + '，报名: ' + regCount + '/' + maxCount + '人');
         }
         lines.push('');
       }
