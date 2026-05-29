@@ -8,7 +8,8 @@
     "pages/grouping/grouping",
     "pages/match-score/match-score",
     "pages/ranking/ranking",
-    "pages/challenge/challenge"
+    "pages/challenge/challenge",
+    "pages/rules/rules"
   ],
   "window": {
     "backgroundTextStyle": "dark",

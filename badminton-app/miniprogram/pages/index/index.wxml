@@ -82,6 +82,12 @@
           <text class="stat-value">{{unavailableActivities.length}}</text>
         </view>
       </view>
+
+      <view class="announcement-bar" bindtap="goToRules">
+        <text class="announcement-icon">📢</text>
+        <text class="announcement-text">查看比赛规则和积分说明</text>
+        <text class="announcement-arrow">›</text>
+      </view>
     </view>
 
     <view class="action-grid">

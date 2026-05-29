@@ -1,0 +1,80 @@
+<!--pages/rules/rules.wxml-->
+<view class="rules-page">
+  <view class="rules-hero">
+    <view class="hero-badge">RULES</view>
+    <view class="hero-title">比赛规则</view>
+    <view class="hero-desc">了解不同比赛类型的规则和积分方式</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-section">
+    <view class="loading-spinner"></view>
+    <text>加载中...</text>
+  </view>
+
+  <view wx:if="{{!loading && sections.length > 0}}" class="rules-content">
+    <!-- Tab 切换 -->
+    <view class="tab-shell">
+      <view class="tab-header">
+        <view
+          wx:for="{{sections}}"
+          wx:key="id"
+          class="tab-item {{currentTab === item.id ? 'active' : ''}}"
+          data-tab="{{item.id}}"
+          bindtap="switchTab">
+          <text class="tab-icon">{{item.icon}}</text>
+          <text class="tab-text">{{item.name}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 规则内容 -->
+    <view wx:if="{{currentSection}}" class="rule-section">
+      <!-- 比赛规则 -->
+      <view class="rule-card">
+        <view class="rule-card-header">
+          <text class="rule-card-icon">📋</text>
+          <text class="rule-card-title">比赛规则</text>
+        </view>
+        <view class="rule-list">
+          <view wx:for="{{currentSection.match_rules}}" wx:key="index" class="rule-item">
+            <text class="rule-bullet">•</text>
+            <text class="rule-text">{{item}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 积分规则 -->
+      <view class="rule-card">
+        <view class="rule-card-header">
+          <text class="rule-card-icon">📊</text>
+          <text class="rule-card-title">积分规则</text>
+        </view>
+        <view class="rule-list">
+          <view wx:for="{{currentSection.scoring_rules}}" wx:key="index" class="rule-item">
+            <text class="rule-bullet">•</text>
+            <text class="rule-text">{{item}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 通用规则 -->
+      <view class="rule-card" wx:if="{{currentSection.common_rules && currentSection.common_rules.length > 0}}">
+        <view class="rule-card-header">
+          <text class="rule-card-icon">ℹ️</text>
+          <text class="rule-card-title">通用规则</text>
+        </view>
+        <view class="rule-list">
+          <view wx:for="{{currentSection.common_rules}}" wx:key="index" class="rule-item">
+            <text class="rule-bullet">•</text>
+            <text class="rule-text">{{item}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{!loading && sections.length === 0}}" class="empty-section">
+    <text class="empty-icon">📄</text>
+    <text class="empty-text">暂无规则数据</text>
+  </view>
+</view>

@@ -214,6 +214,12 @@ Page({
     });
   },
 
+  goToRules: function() {
+    wx.navigateTo({
+      url: '/pages/rules/rules'
+    });
+  },
+
 
   onEditNickname: function() {
     const userInfo = this.data.userInfo;

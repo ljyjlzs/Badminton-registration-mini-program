@@ -1,10 +1,10 @@
 /**
  * confirmScore 云函数 - 确认/拒绝比分
- * 
+ *
  * 积分规则：
  * - 小组赛：胜者+比分差，败者-比分差
- * - 挑战赛：胜者+10分，败者+0分
- * - 决赛：胜者+15分，败者+0分
+ * - 挑战赛：胜者+10分，败者-10分
+ * - 决赛：胜者+15分，败者-15分
  */
 
 const cloud = require('wx-server-sdk');
@@ -17,7 +17,7 @@ const db = cloud.database();
 
 function calculateGroupScore(team1Score, team2Score) {
   const scoreDiff = Math.abs(team1Score - team2Score);
-  
+
   if (team1Score > team2Score) {
     return { team1ScoreChange: scoreDiff, team2ScoreChange: -scoreDiff };
   } else if (team2Score > team1Score) {
@@ -30,15 +30,15 @@ function calculateGroupScore(team1Score, team2Score) {
 function calculateChallengeScore(team1Score, team2Score, round) {
   if (round === 'challenge') {
     if (team1Score > team2Score) {
-      return { team1ScoreChange: 10, team2ScoreChange: 0 };
+      return { team1ScoreChange: 10, team2ScoreChange: -10 };
     } else if (team2Score > team1Score) {
-      return { team1ScoreChange: 0, team2ScoreChange: 10 };
+      return { team1ScoreChange: -10, team2ScoreChange: 10 };
     }
   } else if (round === 'final') {
     if (team1Score > team2Score) {
-      return { team1ScoreChange: 15, team2ScoreChange: 0 };
+      return { team1ScoreChange: 15, team2ScoreChange: -15 };
     } else if (team2Score > team1Score) {
-      return { team1ScoreChange: 0, team2ScoreChange: 15 };
+      return { team1ScoreChange: -15, team2ScoreChange: 15 };
     }
   }
   return { team1ScoreChange: 0, team2ScoreChange: 0 };
