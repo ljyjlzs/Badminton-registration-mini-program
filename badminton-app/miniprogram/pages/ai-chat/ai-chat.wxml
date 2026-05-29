@@ -24,6 +24,30 @@
         <text class="msg-text" user-select>{{item.displayContent}}</text>
       </view>
 
+      <!-- 活动选择卡片 -->
+      <view wx:if="{{item.hasSelect}}" class="select-card">
+        <view class="select-card-header">
+          <text class="select-icon">🏸</text>
+          <text class="select-title">请选择要报名的活动</text>
+        </view>
+        <view class="select-list">
+          <view
+            wx:for="{{item.selectOptions}}"
+            wx:for-item="activity"
+            wx:key="id"
+            class="select-item"
+            data-activity="{{activity}}"
+            bindtap="onSelectActivity">
+            <view class="select-item-name">{{activity.name}}</view>
+            <view class="select-item-meta">
+              <text class="select-item-time">{{activity.time}}</text>
+              <text class="select-item-location">{{activity.location}}</text>
+            </view>
+            <view wx:if="{{activity.organizer}}" class="select-item-organizer">组织者: {{activity.organizer}}</view>
+          </view>
+        </view>
+      </view>
+
       <!-- 操作确认卡片 -->
       <view wx:if="{{item.hasAction}}" class="action-card action-card-{{item.actionStatus}}">
         <!-- 卡片头部 -->

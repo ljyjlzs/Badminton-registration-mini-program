@@ -128,6 +128,81 @@
   padding: 0 8rpx;
 }
 
+/* ============ 活动选择卡片 ============ */
+.select-card {
+  width: 90%;
+  margin: 10rpx 0;
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  padding: 28rpx 28rpx 26rpx;
+  box-shadow: var(--shadow-lg);
+  border: 1rpx solid var(--border-light);
+  border-left: 8rpx solid #2386e0;
+  backdrop-filter: blur(12rpx);
+  animation: slideUp 0.32s ease;
+}
+
+.select-card-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.select-icon {
+  font-size: 32rpx;
+  margin-right: 14rpx;
+}
+
+.select-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.select-item {
+  background: linear-gradient(135deg, #fbfdfc 0%, #f4f8f6 100%);
+  border-radius: 20rpx;
+  padding: 22rpx 24rpx;
+  border: 2rpx solid var(--border-light);
+  transition: all 0.2s ease;
+}
+
+.select-item:active {
+  border-color: var(--primary-color);
+  background: rgba(14, 165, 107, 0.05);
+  transform: scale(0.98);
+}
+
+.select-item-name {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10rpx;
+}
+
+.select-item-meta {
+  display: flex;
+  gap: 20rpx;
+  margin-bottom: 8rpx;
+}
+
+.select-item-time,
+.select-item-location {
+  font-size: 24rpx;
+  color: var(--text-tertiary);
+}
+
+.select-item-organizer {
+  font-size: 22rpx;
+  color: var(--text-secondary);
+}
+
 /* ============ 操作确认卡片 ============ */
 .action-card {
   width: 90%;

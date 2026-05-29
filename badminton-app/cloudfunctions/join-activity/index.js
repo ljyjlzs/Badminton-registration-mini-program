@@ -53,9 +53,10 @@ exports.main = async (event, context) => {
   let realActivityId = activityId;
 
   if (!realActivityId && activityName && activityName.trim()) {
-    // AI 可能传了活动名称，按名称精确匹配 registering 状态的活动
+    // AI 可能传了活动名称，先精确匹配，再模糊匹配
     try {
-      const nameResult = await db.collection('activities')
+      // 1. 先尝试精确匹配
+      const exactResult = await db.collection('activities')
         .where({
           name: activityName.trim(),
           status: 'registering'
@@ -63,13 +64,46 @@ exports.main = async (event, context) => {
         .limit(1)
         .get();
 
-      if (nameResult.data && nameResult.data.length > 0) {
-        realActivityId = nameResult.data[0]._id;
+      if (exactResult.data && exactResult.data.length > 0) {
+        realActivityId = exactResult.data[0]._id;
       } else {
-        return {
-          success: false,
-          error: '未找到名为「' + activityName + '」的可报名活动'
-        };
+        // 2. 精确匹配失败，尝试模糊匹配
+        const allActivities = await db.collection('activities')
+          .where({ status: 'registering' })
+          .limit(100)
+          .get();
+
+        const keyword = activityName.trim().toLowerCase();
+        const matched = (allActivities.data || []).filter(a => {
+          const nameMatch = a.name && a.name.toLowerCase().includes(keyword);
+          const locationMatch = a.location && a.location.toLowerCase().includes(keyword);
+          // 也支持按组织者名字匹配（需要查询users表）
+          return nameMatch || locationMatch;
+        });
+
+        if (matched.length === 0) {
+          return {
+            success: false,
+            error: '未找到包含「' + activityName + '」的可报名活动'
+          };
+        } else if (matched.length === 1) {
+          // 只有一个匹配，直接使用
+          realActivityId = matched[0]._id;
+        } else {
+          // 多个匹配，返回列表供用户选择
+          return {
+            success: false,
+            error: 'MULTIPLE_MATCHES',
+            data: {
+              matches: matched.map(a => ({
+                id: a._id,
+                name: a.name,
+                time: a.time,
+                location: a.location
+              }))
+            }
+          };
+        }
       }
     } catch (e) {
       return {

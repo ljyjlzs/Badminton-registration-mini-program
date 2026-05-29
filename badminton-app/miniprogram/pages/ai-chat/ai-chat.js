@@ -64,7 +64,7 @@ Page({
   },
 
   // ======================================================
-  // 解析消息：检测 __ACTION__ 块
+  // 解析消息：检测 __ACTION__ 块和 __SELECT__ 块
   // ======================================================
   _parseMessage: function(m) {
     const base = {
@@ -72,11 +72,30 @@ Page({
       timeStr: this.formatTime(m.created_at),
       hasAction: false,
       actionData: null,
+      hasSelect: false,
+      selectOptions: [],
       displayContent: m.content,
       actionStatus: '' // '' | 'pending' | 'confirmed' | 'cancelled' | 'executing' | 'success' | 'error'
     };
 
     if (m.role !== 'assistant') return base;
+
+    // 匹配 __SELECT__[...]__END__（活动选择列表）
+    const selectMatch = m.content.match(/__SELECT__(\[[\s\S]*?\])__END__/);
+    if (selectMatch) {
+      try {
+        const selectOptions = JSON.parse(selectMatch[1]);
+        const displayContent = m.content.replace(/__SELECT__[\s\S]*?__END__/, '').trim();
+        return {
+          ...base,
+          hasSelect: true,
+          selectOptions: selectOptions,
+          displayContent: displayContent
+        };
+      } catch (e) {
+        // 解析失败，继续尝试 ACTION
+      }
+    }
 
     // 匹配 __ACTION__{...}__END__
     const actionMatch = m.content.match(/__ACTION__(\{[\s\S]*?\})__END__/);
@@ -133,13 +152,22 @@ Page({
   },
 
   // ======================================================
-  // 调用 AI 云函数
+  // 调用 AI 云函数（带超时处理）
   // ======================================================
   _callAI: function(params) {
+    // 设置超时处理（30秒）
+    const timeoutId = setTimeout(() => {
+      if (this.data.loading) {
+        this.setData({ loading: false });
+        wx.showToast({ title: 'AI响应超时，请重试', icon: 'none', duration: 3000 });
+      }
+    }, 30000);
+
     wx.cloud.callFunction({
       name: 'ai-chat',
       data: params,
       success: res => {
+        clearTimeout(timeoutId);
         this.setData({ loading: false });
         if (res.result && res.result.success) {
           const raw = {
@@ -155,13 +183,44 @@ Page({
           });
           this.scrollToBottom(String(Date.now()));
         } else {
-          wx.showToast({ title: res.result?.error || '发送失败', icon: 'none' });
+          // 显示错误信息，但不阻断对话
+          const errorMsg = res.result?.error || '发送失败';
+          wx.showToast({ title: errorMsg, icon: 'none', duration: 3000 });
+          // 添加错误提示消息
+          const errMsg = {
+            _id: 'err_' + Date.now(),
+            role: 'assistant',
+            content: '抱歉，AI暂时无法响应：' + errorMsg,
+            displayContent: '抱歉，AI暂时无法响应：' + errorMsg,
+            hasAction: false,
+            hasSelect: false,
+            actionStatus: '',
+            timeStr: '刚刚'
+          };
+          this.setData({
+            messages: [...this.data.messages, errMsg]
+          });
         }
       },
       fail: err => {
+        clearTimeout(timeoutId);
         this.setData({ loading: false });
         console.error('ai-chat 云函数调用失败:', err);
-        wx.showToast({ title: err.errMsg || '发送失败', icon: 'none', duration: 3000 });
+        wx.showToast({ title: '网络错误，请检查网络后重试', icon: 'none', duration: 3000 });
+        // 添加网络错误提示消息
+        const errMsg = {
+          _id: 'err_' + Date.now(),
+          role: 'assistant',
+          content: '网络连接失败，请检查网络后重试。',
+          displayContent: '网络连接失败，请检查网络后重试。',
+          hasAction: false,
+          hasSelect: false,
+          actionStatus: '',
+          timeStr: '刚刚'
+        };
+        this.setData({
+          messages: [...this.data.messages, errMsg]
+        });
       }
     });
   },
@@ -211,6 +270,37 @@ Page({
     // 告知 AI 操作已取消
     const cancelText = '[系统通知] 用户取消了操作：' + (msg.actionData.confirm_text || msg.actionData.action);
     this._callAI({ action_result: cancelText });
+  },
+
+  // ======================================================
+  // 用户点击【选择活动】
+  // ======================================================
+  onSelectActivity: function(e) {
+    const activity = e.currentTarget.dataset.activity;
+    if (!activity) return;
+
+    // 发送选择的消息给AI，触发报名流程
+    const selectText = '我选择报名「' + activity.name + '」';
+    this.setData({ loading: true });
+
+    // 添加用户消息到列表
+    const userMsg = {
+      _id: 'tmp_' + Date.now(),
+      role: 'user',
+      content: selectText,
+      displayContent: selectText,
+      hasAction: false,
+      hasSelect: false,
+      actionStatus: '',
+      timeStr: '刚刚'
+    };
+    this.setData({
+      messages: [...this.data.messages, userMsg]
+    });
+    this.scrollToBottom(String(Date.now()));
+
+    // 调用AI，让AI生成操作块
+    this._callAI({ message: selectText });
   },
 
   // ======================================================
@@ -278,6 +368,9 @@ Page({
       success: res => {
         if (res.result && res.result.success) {
           this._finishAction(idx, true, '已成功报名参加活动「' + params.activityName + '」！');
+        } else if (res.result && res.result.error === 'MULTIPLE_MATCHES' && res.result.data && res.result.data.matches) {
+          // 多个匹配结果，渲染选择卡片
+          this._handleMultipleMatches(idx, res.result.data.matches);
         } else {
           this._finishAction(idx, false, '报名失败：' + (res.result?.error || '未知错误'));
         }
@@ -286,6 +379,37 @@ Page({
         this._finishAction(idx, false, '报名失败：' + (err.errMsg || '网络错误'));
       }
     });
+  },
+
+  // ======================================================
+  // 处理多匹配结果：渲染选择卡片
+  // ======================================================
+  _handleMultipleMatches: function(idx, matches) {
+    const messages = this.data.messages;
+    const newMessages = [...messages];
+
+    // 移除原来的操作卡片，替换为选择卡片
+    const selectMsg = {
+      _id: 'select_' + Date.now(),
+      role: 'assistant',
+      content: '',
+      displayContent: '我找到了以下可报名的活动，请选择：',
+      hasAction: false,
+      hasSelect: true,
+      selectOptions: matches.map(m => ({
+        id: m.id,
+        name: m.name,
+        time: this.formatTime(m.time),
+        location: m.location || '待定'
+      })),
+      actionStatus: '',
+      timeStr: '刚刚'
+    };
+
+    // 替换原来的消息
+    newMessages[idx] = selectMsg;
+    this.setData({ messages: newMessages, loading: false });
+    this.scrollToBottom(String(Date.now()));
   },
 
   // ======================================================

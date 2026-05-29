@@ -39,8 +39,42 @@ const typeMap = {
   'fixed-doubles': '双打固搭'
 };
 
+// 时间格式化函数（兼容多种时间格式）
+function formatTime(timeValue) {
+  if (!timeValue) return '时间待定';
+
+  let timestamp = timeValue;
+
+  if (typeof timeValue === 'string') {
+    if (timeValue.includes('T')) {
+      timestamp = new Date(timeValue).getTime();
+    } else if (!isNaN(timeValue)) {
+      timestamp = parseInt(timeValue);
+    } else {
+      return '时间待定';
+    }
+  } else if (typeof timeValue === 'object') {
+    if (timeValue.$date) {
+      timestamp = timeValue.$date;
+    } else {
+      return '时间待定';
+    }
+  }
+
+  if (!timestamp || isNaN(timestamp)) return '时间待定';
+
+  const date = new Date(timestamp);
+  if (isNaN(date.getTime())) return '时间待定';
+
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const hour = date.getHours();
+  const minute = date.getMinutes();
+  return month + '月' + day + '日 ' + hour + ':' + (minute < 10 ? '0' + minute : minute);
+}
+
 // ============================================================
-// 构建用户数据上下文（同时返回活动列表供 AI 使用活动ID）
+// 构建用户数据上下文（并行查询优化版本）
 // ============================================================
 async function buildUserContext(openid) {
   const lines = [];
@@ -55,22 +89,22 @@ async function buildUserContext(openid) {
   lines.push('   params: {name:"活动名", time:"2026-05-10T09:00", location:"场地名", type:"singles"}');
   lines.push('   type可选: singles(单打) / doubles(双打轮换) / fixed-doubles(双打固搭)');
   lines.push('');
-lines.push('2. join_activity - 参加活动');
-lines.push('   params: {activityId:"xxx", activityName:"活动名"}');
-lines.push('   重要: 从下方【可报名的活动】列表中复制"活动ID:"后面的字符串作为 activityId');
-lines.push('   绝对禁止将活动名称填入 activityId 字段！');
-lines.push('   【模糊查询报名流程】当用户说"帮我报名xxx的局"或类似模糊描述时：');
-lines.push('   步骤1: 在【可报名的活动】列表中，用用户的关键词同时匹配"名称""地点""组织者"三个字段（不区分大小写，支持部分匹配）');
-lines.push('   步骤2: 如果匹配到0个 → 回复"当前没有找到符合「xxx」的可报名活动"，列出所有可报名活动供用户参考');
-lines.push('   步骤3: 如果匹配到1个 → 直接告知用户找到了哪个活动，并输出 join_activity 操作块（用该活动的 activityId）');
-lines.push('   步骤4: 如果匹配到多个 → 列出所有匹配的活动（编号+名称+时间+地点+组织者），让用户选择几号，不要输出操作块');
-lines.push('   步骤5: 用户回复选几号后 → 输出对应活动的 join_activity 操作块');
+  lines.push('2. join_activity - 参加活动');
+  lines.push('   params: {activityId:"xxx", activityName:"活动名"}');
+  lines.push('   重要: 从下方【可报名的活动】列表中复制"活动ID:"后面的字符串作为 activityId');
+  lines.push('   绝对禁止将活动名称填入 activityId 字段！');
+  lines.push('   【模糊查询报名流程】当用户说"帮我报名xxx的局"或类似模糊描述时：');
+  lines.push('   步骤1: 在【可报名的活动】列表中，用用户的关键词同时匹配"名称""地点""组织者"三个字段（不区分大小写，支持部分匹配）');
+  lines.push('   步骤2: 如果匹配到0个 → 回复"当前没有找到符合「xxx」的可报名活动"，列出所有可报名活动供用户参考');
+  lines.push('   步骤3: 如果匹配到1个 → 直接告知用户找到了哪个活动，并输出 join_activity 操作块（用该活动的 activityId）');
+  lines.push('   步骤4: 如果匹配到多个 → 列出所有匹配的活动（编号+名称+时间+地点+组织者），让用户选择几号，不要输出操作块');
+  lines.push('   步骤5: 用户回复选几号后 → 输出对应活动的 join_activity 操作块');
   lines.push('');
-lines.push('3. cancel_registration - 取消报名');
-lines.push('   params: {activityId:"xxx", activityName:"活动名"}');
-lines.push('   重要: 从下方【我参加的活动】列表中复制"活动ID:"后面的字符串作为 activityId');
-lines.push('   如果你只有活动名称，把活动名填在 activityName 字段，activityId 可以留空字符串，系统会自动按名称查找');
-lines.push('   绝对禁止将活动名称填入 activityId 字段！');
+  lines.push('3. cancel_registration - 取消报名');
+  lines.push('   params: {activityId:"xxx", activityName:"活动名"}');
+  lines.push('   重要: 从下方【我参加的活动】列表中复制"活动ID:"后面的字符串作为 activityId');
+  lines.push('   如果你只有活动名称，把活动名填在 activityName 字段，activityId 可以留空字符串，系统会自动按名称查找');
+  lines.push('   绝对禁止将活动名称填入 activityId 字段！');
   lines.push('');
   lines.push('### 操作块格式（严格按此格式输出，不得修改标记符号）');
   lines.push('回复文字...');
@@ -85,151 +119,166 @@ lines.push('   绝对禁止将活动名称填入 activityId 字段！');
   lines.push('AI: 我找到以下可报名的活动：...');
   lines.push('__ACTION__{"action":"join_activity","params":{"activityId":"a1b2c3d4e5","activityName":"周末双打"},"confirm_text":"确认报名参加活动「周末双打」？"}__END__');
   lines.push('');
-lines.push('### 约束规则');
-lines.push('- 你有操作权限，绝对不能说"我无法操作""我不能创建""我只是AI助手"之类的话');
-lines.push('- activityId 必须是"活动ID:"后面的纯字母数字串，绝对禁止填活动名称');
-lines.push('- 模糊报名时，先搜索匹配，匹配多个时列出让用户选择，用户选定后再生成操作块');
-lines.push('- 如果用户只有活动名称无法找到ID，activityId 填空字符串 ""，把名称填在 activityName 中');
-lines.push('- 如果可报名活动列表为空，直接告诉用户"当前没有可报名的活动"');
-lines.push('- 信息不足时先追问，信息齐全时立即生成操作块');
-lines.push('- 操作块必须在回复最末尾，后面不能再有文字');
-lines.push('- 时间必须是未来时间，ISO格式如 2026-05-10T09:00');
+  lines.push('### 约束规则');
+  lines.push('- 你有操作权限，绝对不能说"我无法操作""我不能创建""我只是AI助手"之类的话');
+  lines.push('- activityId 必须是"活动ID:"后面的纯字母数字串，绝对禁止填活动名称');
+  lines.push('- 如果用户只有活动名称无法找到ID，activityId 填空字符串 ""，把名称填在 activityName 中');
+  lines.push('- 如果可报名活动列表为空，直接告诉用户"当前没有可报名的活动"');
+  lines.push('- 信息不足时先追问，信息齐全时立即生成操作块');
+  lines.push('- 操作块必须在回复最末尾，后面不能再有文字');
+  lines.push('- 时间必须是未来时间，ISO格式如 2026-05-10T09:00');
+  lines.push('');
+  lines.push('### 模糊搜索规则（当用户说"报名XX的局"或类似模糊请求时）');
+  lines.push('【重要】你只能使用下方【可报名的活动】列表中实际存在的活动，绝对禁止编造、虚构、猜测任何活动名称！');
+  lines.push('');
+  lines.push('1. 先从【可报名的活动】中按以下维度模糊匹配（忽略大小写）：');
+  lines.push('   - 活动名称包含关键词');
+  lines.push('   - 地点包含关键词');
+  lines.push('   - 组织者名字包含关键词');
+  lines.push('2. 如果匹配到多个活动，列出所有匹配的活动供用户选择，格式如下：');
+  lines.push('   我找到了以下包含"XX"的活动：');
+  lines.push('   1. 活动名称 - 时间 - 地点 - 组织者: XXX');
+  lines.push('   2. 活动名称 - 时间 - 地点 - 组织者: XXX');
+  lines.push('   请告诉我你要报名哪一个？（不要生成操作块）');
+  lines.push('3. 如果只匹配到一个活动，直接生成操作块执行报名');
+  lines.push('4. 如果没有匹配到任何活动，必须回复："当前没有找到包含「XX」的可报名活动"，然后列出所有可报名活动供用户参考');
+  lines.push('');
+  lines.push('### 模糊搜索示例');
+  lines.push('用户: 帮我报名炽羽的局');
+  lines.push('AI: 当前没有找到包含「炽羽」的可报名活动。');
+  lines.push('目前可报名的活动有：');
+  lines.push('1. 周六测试局 - 5月30日 19:00 - XX体育馆 - 组织者: 张三');
+  lines.push('请告诉我你要报名哪个活动？');
+  lines.push('');
+  lines.push('【严禁】绝对禁止编造不存在的活动名称！如果列表中没有匹配的活动，必须如实告知用户！');
   lines.push('');
 
-  // 1. 用户信息
-  try {
-    const userResult = await db.collection('users').where({ _openid: openid }).limit(1).get();
-    const user = (userResult.data || [])[0];
-    if (user) {
-      lines.push('【用户信息】昵称：' + (user.nickname || '未知') + '，等级：' + (user.level || 5));
-      lines.push('');
-    }
-  } catch (e) {
-    console.log('查询用户信息失败:', e.message);
+  // 并行查询所有数据
+  const [userResult, pubActResult, orgActResult, regResult] = await Promise.all([
+    // 1. 用户信息
+    db.collection('users').where({ _openid: openid }).limit(1).get().catch(e => ({ data: [] })),
+    // 2. 可报名的公开活动
+    db.collection('activities').where({ status: 'registering' }).orderBy('created_at', 'desc').limit(20).get().catch(e => ({ data: [] })),
+    // 3. 我组织的活动
+    db.collection('activities').where({ organizer_id: openid }).orderBy('created_at', 'desc').limit(20).get().catch(e => ({ data: [] })),
+    // 4. 我参加的活动
+    db.collection('registrations').where({ user_id: openid, cancel_status: _.neq('approved') }).limit(50).get().catch(e => ({ data: [] }))
+  ]);
+
+  // 处理用户信息
+  const user = (userResult.data || [])[0];
+  if (user) {
+    lines.push('【用户信息】昵称：' + (user.nickname || '未知') + '，等级：' + (user.level || 5));
+    lines.push('');
   }
 
-  // 2. 可报名的公开活动（排在前面，确保不被截断）
-  try {
-    const pubResult = await db.collection('activities')
-      .where({ status: 'registering' })
-      .orderBy('created_at', 'desc')
-      .limit(20)
-      .get();
-    const pubActs = pubResult.data || [];
-    if (pubActs.length > 0) {
-      // 批量查询组织者名字
-      const organizerIds = [...new Set(pubActs.map(a => a.organizer_id).filter(Boolean))];
-      const organizerNameMap = {};
-      if (organizerIds.length > 0) {
-        try {
-          const orgUsers = await db.collection('users')
-            .where({ _openid: db.command.in(organizerIds) })
-            .field({ _openid: true, nickname: true })
-            .get();
-          (orgUsers.data || []).forEach(u => {
-            organizerNameMap[u._openid] = u.nickname || '未知';
-          });
-        } catch (e) { /* ignore */ }
-      }
+  // 处理可报名的公开活动
+  const pubActs = pubActResult.data || [];
+  if (pubActs.length > 0) {
+    // 批量查询组织者名字和报名人数
+    const organizerIds = [...new Set(pubActs.map(a => a.organizer_id).filter(Boolean))];
+    const actIds = pubActs.map(a => a._id);
 
-      lines.push('【可报名的活动】(' + pubActs.length + '个)');
-      for (const act of pubActs) {
-        let regCount = 0;
-        try {
-          const regRes = await db.collection('registrations')
-            .where({ activity_id: act._id, cancel_status: _.neq('approved') })
-            .count();
-          regCount = regRes.total || 0;
-        } catch (e) { /* ignore */ }
-        const typeCn = typeMap[act.type] || act.type || '未知';
-        const timeStr = act.time ? act.time.replace('T', ' ').substring(0, 16) : '时间待定';
-        const organizerName = organizerNameMap[act.organizer_id] || '未知';
-        lines.push('- 活动ID: ' + act._id);
-        lines.push('  名称: ' + (act.name || '未命名') + '，类型: ' + typeCn + '，时间: ' + timeStr + '，地点: ' + (act.location || '未知') + '，组织者: ' + organizerName + '，报名: ' + regCount + '/' + (act.max_players || '?') + '人');
-      }
-      lines.push('');
-    } else {
-      lines.push('【可报名的活动】当前无可报名活动');
-      lines.push('');
+    const [orgUsersResult, regCountsResult] = await Promise.all([
+      organizerIds.length > 0 ? db.collection('users').where({ _openid: db.command.in(organizerIds) }).field({ _openid: true, nickname: true }).get().catch(e => ({ data: [] })) : Promise.resolve({ data: [] }),
+      // 批量查询报名人数
+      db.collection('registrations').where({ activity_id: db.command.in(actIds), cancel_status: _.neq('approved') }).field({ activity_id: true }).limit(1000).get().catch(e => ({ data: [] }))
+    ]);
+
+    const organizerNameMap = {};
+    (orgUsersResult.data || []).forEach(u => {
+      organizerNameMap[u._openid] = u.nickname || '未知';
+    });
+
+    // 统计每个活动的报名人数
+    const regCountMap = {};
+    (regCountsResult.data || []).forEach(r => {
+      regCountMap[r.activity_id] = (regCountMap[r.activity_id] || 0) + 1;
+    });
+
+    lines.push('【可报名的活动】(' + pubActs.length + '个)');
+    for (const act of pubActs) {
+      const typeCn = typeMap[act.type] || act.type || '未知';
+      const timeStr = formatTime(act.time);
+      const organizerName = organizerNameMap[act.organizer_id] || '未知';
+      const regCount = regCountMap[act._id] || 0;
+      lines.push('- 活动ID: ' + act._id);
+      lines.push('  名称: ' + (act.name || '未命名') + '，类型: ' + typeCn + '，时间: ' + timeStr + '，地点: ' + (act.location || '未知') + '，组织者: ' + organizerName + '，报名: ' + regCount + '/' + (act.max_players || '?') + '人');
     }
-  } catch (e) {
-    console.log('查询公开活动失败:', e.message);
+    lines.push('');
+  } else {
+    lines.push('【可报名的活动】当前无可报名活动');
+    lines.push('');
   }
 
-  // 3. 我组织的活动
-  try {
-    const orgResult = await db.collection('activities')
-      .where({ organizer_id: openid })
+  // 处理我组织的活动
+  const organized = orgActResult.data || [];
+  if (organized.length > 0) {
+    const orgActIds = organized.map(a => a._id);
+    const orgRegCountsResult = await db.collection('registrations')
+      .where({ activity_id: db.command.in(orgActIds), cancel_status: _.neq('approved') })
+      .field({ activity_id: true })
+      .limit(1000)
+      .get()
+      .catch(e => ({ data: [] }));
+
+    const orgRegCountMap = {};
+    (orgRegCountsResult.data || []).forEach(r => {
+      orgRegCountMap[r.activity_id] = (orgRegCountMap[r.activity_id] || 0) + 1;
+    });
+
+    lines.push('【我组织的活动】(' + organized.length + '个)');
+    for (const act of organized) {
+      const typeCn = typeMap[act.type] || act.type || '未知';
+      const statusCn = statusMap[act.status] || act.status;
+      const timeStr = formatTime(act.time);
+      const regCount = orgRegCountMap[act._id] || 0;
+      const maxCount = act.max_players || '?';
+      lines.push('- 活动ID: ' + act._id);
+      lines.push('  名称: ' + (act.name || '未命名') + '，类型: ' + typeCn + '，时间: ' + timeStr + '，地点: ' + (act.location || '未知') + '，状态: ' + statusCn + '，报名: ' + regCount + '/' + maxCount + '人');
+    }
+    lines.push('');
+  }
+
+  // 处理我参加的活动
+  const regs = regResult.data || [];
+  const myActIds = [...new Set(regs.map(r => r.activity_id))];
+
+  if (myActIds.length > 0) {
+    const myActResult = await db.collection('activities')
+      .where({ _id: db.command.in(myActIds) })
       .orderBy('created_at', 'desc')
       .limit(20)
-      .get();
+      .get()
+      .catch(e => ({ data: [] }));
 
-    const organized = orgResult.data || [];
-    if (organized.length > 0) {
-      lines.push('【我组织的活动】(' + organized.length + '个)');
-      for (const act of organized) {
-        let regCount = 0;
-        let maxCount = act.max_players || '?';
-        try {
-          const regRes = await db.collection('registrations')
-            .where({ activity_id: act._id, cancel_status: _.neq('approved') })
-            .count();
-          regCount = regRes.total || 0;
-        } catch (e) { /* ignore */ }
+    const acts = (myActResult.data || []).filter(a => a.organizer_id !== openid);
+    if (acts.length > 0) {
+      const joinedActIds = acts.map(a => a._id);
+      const joinedRegCountsResult = await db.collection('registrations')
+        .where({ activity_id: db.command.in(joinedActIds), cancel_status: _.neq('approved') })
+        .field({ activity_id: true })
+        .limit(1000)
+        .get()
+        .catch(e => ({ data: [] }));
 
+      const joinedRegCountMap = {};
+      (joinedRegCountsResult.data || []).forEach(r => {
+        joinedRegCountMap[r.activity_id] = (joinedRegCountMap[r.activity_id] || 0) + 1;
+      });
+
+      lines.push('【我参加的活动】(' + acts.length + '个)');
+      for (const act of acts) {
         const typeCn = typeMap[act.type] || act.type || '未知';
         const statusCn = statusMap[act.status] || act.status;
-        const timeStr = act.time ? act.time.replace('T', ' ').substring(0, 16) : '时间待定';
+        const timeStr = formatTime(act.time);
+        const regCount = joinedRegCountMap[act._id] || 0;
+        const maxCount = act.max_players || '?';
         lines.push('- 活动ID: ' + act._id);
         lines.push('  名称: ' + (act.name || '未命名') + '，类型: ' + typeCn + '，时间: ' + timeStr + '，地点: ' + (act.location || '未知') + '，状态: ' + statusCn + '，报名: ' + regCount + '/' + maxCount + '人');
       }
       lines.push('');
     }
-  } catch (e) {
-    console.log('查询组织活动失败:', e.message);
-  }
-
-  // 4. 我参加的活动（排除我组织的）
-  try {
-    const regResult = await db.collection('registrations')
-      .where({ user_id: openid, cancel_status: _.neq('approved') })
-      .limit(50)
-      .get();
-
-    const regs = regResult.data || [];
-    const actIds = [...new Set(regs.map(r => r.activity_id))];
-
-    if (actIds.length > 0) {
-      const actResult = await db.collection('activities')
-        .where({ _id: _.in(actIds) })
-        .orderBy('created_at', 'desc')
-        .limit(20)
-        .get();
-
-      const acts = (actResult.data || []).filter(a => a.organizer_id !== openid);
-      if (acts.length > 0) {
-        lines.push('【我参加的活动】(' + acts.length + '个)');
-        for (const act of acts) {
-          let regCount = 0;
-          let maxCount = act.max_players || '?';
-          try {
-            const regRes = await db.collection('registrations')
-              .where({ activity_id: act._id, cancel_status: _.neq('approved') })
-              .count();
-            regCount = regRes.total || 0;
-          } catch (e) { /* ignore */ }
-
-          const typeCn = typeMap[act.type] || act.type || '未知';
-          const statusCn = statusMap[act.status] || act.status;
-          const timeStr = act.time ? act.time.replace('T', ' ').substring(0, 16) : '时间待定';
-          lines.push('- 活动ID: ' + act._id);
-          lines.push('  名称: ' + (act.name || '未命名') + '，类型: ' + typeCn + '，时间: ' + timeStr + '，地点: ' + (act.location || '未知') + '，状态: ' + statusCn + '，报名: ' + regCount + '/' + maxCount + '人');
-        }
-        lines.push('');
-      }
-    }
-  } catch (e) {
-    console.log('查询参加活动失败:', e.message);
   }
 
   // 5. 活动排名数据
