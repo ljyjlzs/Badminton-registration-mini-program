@@ -1,5 +1,7 @@
 // 首页逻辑
 const app = getApp();
+const { request } = require('../../utils/request.js');
+const shareUtil = require('../../utils/share.js');
 
 Page({
   data: {
@@ -8,20 +10,47 @@ Page({
     myActivities: [],
     joinableActivities: [],
     unavailableActivities: [],
+    myActivitiesTotal: 0,
+    joinableActivitiesTotal: 0,
+    unavailableActivitiesTotal: 0,
     loading: true,
     showEditDialog: false,
     editType: 'nickname',
-    editNickname: ''
+    editNickname: '',
+    userStats: null,
+    userBadges: []
+  },
+
+  onShareAppMessage: function() {
+    var s = shareUtil.makeShare({ title: '羽毛球活动约起来', path: '/pages/index/index' });
+    return { title: s.title, path: s.path };
+  },
+
+  onShareTimeline: function() {
+    var s = shareUtil.makeShare({ title: '羽毛球活动约起来', path: '/pages/index/index' });
+    return { title: s.title, query: s.timeline.query };
   },
 
   onLoad: function() {
+    this._firstShowDone = false;
+    this._lastLoadAt = 0;
     this.checkLogin();
   },
 
   onShow: function() {
-    if (this.data.isLoggedIn) {
+    if (!this.data.isLoggedIn) return;
+    // PERF-18: 避免冷启动 onLoad(checkLogin) 与 onShow 双跑 get-activities
+    if (!this._firstShowDone) {
+      this._firstShowDone = true;
+      if (this._lastLoadAt) return;
       this.loadActivities();
+      this.loadUserStats();
+      return;
     }
+    // PERF-21: 60 秒内重复进入不全量刷新
+    if (Date.now() - this._lastLoadAt < 15000) return;
+    this.loadActivities();
+    this.loadUserStats();
   },
 
   checkLogin: function() {
@@ -34,6 +63,8 @@ Page({
       // 从 users 表加载最新的昵称和头像
       this.loadLatestUserInfo();
       this.loadActivities();
+      // PERF-18: 首次加载由 checkLogin 触发，置位避免 onShow 再跑一轮
+      this._firstShowDone = true;
     } else {
       this.setData({
         loading: false
@@ -45,7 +76,7 @@ Page({
     const openid = app.globalData.openid;
     if (!openid) return;
     const db = wx.cloud.database();
-    db.collection('users').where({ _openid: openid }).get({
+    db.collection('users').where({ openid: openid }).get({
       success: res => {
         if (res.data && res.data.length > 0) {
           const latestUser = res.data[0];
@@ -73,122 +104,96 @@ Page({
       });
       
       // 调用登录云函数
-      wx.cloud.callFunction({
-        name: 'login',
-        data: {
-          userInfo: userInfo
-        },
-        success: res => {
-          this.setData({ loading: false });
-          
-          if (res.result) {
-            const result = res.result;
-            if (result.success && result.data) {
-              app.saveLoginInfo({
-                ...result.data,
-                ...userInfo
-              }, result.data.openid);
+      request('login', 'login', { userInfo: userInfo }).then(res => {
+        this.setData({ loading: false });
 
-              this.setData({
-                isLoggedIn: true,
-                userInfo: app.globalData.userInfo
-              });
-              
-              this.loadActivities();
-            } else {
-              wx.showToast({
-                title: result.error || '登录失败',
-                icon: 'none'
-              });
-            }
+        if (res.result) {
+          const result = res.result;
+          if (result.success && result.data) {
+            app.saveLoginInfo({
+              ...result.data,
+              ...userInfo
+            }, result.data.openid);
+
+      this.setData({
+        isLoggedIn: true,
+        userInfo: app.globalData.userInfo
+      });
+
+      this.loadActivities();
+      this.loadUserStats();
           } else {
-            console.error('res.result为空', res);
             wx.showToast({
-              title: '登录失败',
+              title: result.message || '登录失败',
               icon: 'none'
             });
           }
-        },
-        fail: err => {
-          console.error('登录失败：', err);
-          this.setData({ loading: false });
+        } else {
+          console.error('res.result为空', res);
           wx.showToast({
-            title: '登录失败，请重试',
+            title: '登录失败',
             icon: 'none'
           });
         }
+      }).catch(err => {
+        console.error('登录失败：', err);
+        this.setData({ loading: false });
+        wx.showToast({
+          title: '登录失败，请重试',
+          icon: 'none'
+        });
       });
     }
   },
 
-  loadActivities: function() {
+  loadUserStats: function() {
     const openid = app.globalData.openid;
-    let completed = 0;
-    const total = 3;
-    
-    const checkDone = () => {
-      completed++;
-      if (completed >= total) {
-        this.setData({ loading: false });
-      }
-    };
-    
-    // 查询我创建的活动
-    wx.cloud.callFunction({
-      name: 'get-activities',
-      data: {
-        type: 'organized',
-        openid: openid
-      },
+    if (!openid) return;
+    const db = wx.cloud.database();
+    db.collection('scores').where({ userId: openid }).get({
       success: res => {
-        if (res.result && res.result.success) {
-          this.setData({
-            myActivities: res.result.data || []
-          });
-        }
-        checkDone();
+        const scores = res.data || [];
+        const totalGames = scores.length;
+        const totalWins = scores.filter(s => s.scoreChange > 0).length;
+        const totalScore = scores.reduce((sum, s) => sum + (s.scoreChange || 0), 0);
+        const winRate = totalGames > 0 ? Math.round(totalWins / totalGames * 100) + '%' : '0%';
+        const badges = [];
+        if (totalGames >= 10) badges.push({ id: 'games10', icon: '🏸', name: '活跃选手' });
+        if (totalGames >= 50) badges.push({ id: 'games50', icon: '🔥', name: '赛场老兵' });
+        if (totalWins >= 10) badges.push({ id: 'wins10', icon: '🏆', name: '十连胜' });
+        if (totalScore >= 100) badges.push({ id: 'score100', icon: '⭐', name: '百分达人' });
+        this.setData({ userStats: { totalGames, totalWins, winRate, totalScore }, userBadges: badges });
       },
-      fail: () => {
-        checkDone();
-      }
+      fail: () => {}
     });
-    
-    // 查询可参加的活动
-    wx.cloud.callFunction({
-      name: 'get-activities',
-      data: {
-        type: 'available'
-      },
-      success: res => {
-        if (res.result && res.result.success) {
-          this.setData({
-            joinableActivities: res.result.data || []
-          });
-        }
-        checkDone();
-      },
-      fail: () => {
-        checkDone();
-      }
-    });
-    
-    // 查询不可参加的活动（正在进行和已结束）
-    wx.cloud.callFunction({
-      name: 'get-activities',
-      data: {
-        type: 'unavailable'
-      },
-      success: res => {
-        if (res.result && res.result.success) {
-          this.setData({
-            unavailableActivities: res.result.data || []
-          });
-        }
-        checkDone();
-      },
-      fail: () => {
-        checkDone();
-      }
+  },
+
+  loadActivities: function() {
+    this._lastLoadAt = Date.now();
+
+    // PERF-04: 三类活动列表相互独立，Promise.all 并行拉取
+    const fetchList = (type) =>
+      request('get-activities', 'list', { type: type, page: 1, pageSize: 20 }).catch(() => null);
+
+    Promise.all([
+      fetchList('organized'),
+      fetchList('available'),
+      fetchList('unavailable')
+    ]).then(([myRes, joinableRes, unavailableRes]) => {
+      const applyList = (res, cacheKey, listKey, totalKey) => {
+        if (!(res && res.result && res.result.success)) return;
+        const d = res.result.data || {};
+        const all = d.list || [];
+        this[cacheKey] = all;
+        this.setData({
+          [listKey]: all.slice(0, 3),
+          [totalKey]: d.total || all.length
+        });
+      };
+      applyList(myRes, '_allMyActivities', 'myActivities', 'myActivitiesTotal');
+      applyList(joinableRes, '_allJoinableActivities', 'joinableActivities', 'joinableActivitiesTotal');
+      applyList(unavailableRes, '_allUnavailableActivities', 'unavailableActivities', 'unavailableActivitiesTotal');
+      this.setData({ loading: false });
     });
   },
 
@@ -272,25 +277,18 @@ Page({
 
   saveAvatar: function(avatar) {
     wx.showLoading({ title: '保存中...' });
-    
-    wx.cloud.callFunction({
-      name: 'update-user-avatar',
-      data: { avatar: avatar },
-      success: (res) => {
-        wx.hideLoading();
-        if (res.result && res.result.success) {
-          this.setData({
-            'userInfo.avatar': avatar
-          });
-          wx.showToast({ title: '头像已更新', icon: 'success' });
-        } else {
-          wx.showToast({ title: '保存失败', icon: 'none' });
-        }
-      },
-      fail: () => {
-        wx.hideLoading();
+
+    request('update-user-avatar', 'update', { avatar: avatar }).then(res => {
+      wx.hideLoading();
+      if (res.result && res.result.success) {
+        this.setData({ 'userInfo.avatar': avatar });
+        wx.showToast({ title: '头像已更新', icon: 'success' });
+      } else {
         wx.showToast({ title: '保存失败', icon: 'none' });
       }
+    }).catch(() => {
+      wx.hideLoading();
+      wx.showToast({ title: '保存失败', icon: 'none' });
     });
   },
 
@@ -318,25 +316,25 @@ Page({
     }
     
     wx.showLoading({ title: '保存中...' });
-    wx.cloud.callFunction({
-      name: 'update-user-info',
-      data: { nickname: nickname },
-      success: res => {
-        wx.hideLoading();
-        if (res.result && res.result.success) {
-          this.setData({
-            'userInfo.nickname': nickname,
-            showEditDialog: false
-          });
-          wx.showToast({ title: '保存成功', icon: 'success' });
-        } else {
-          wx.showToast({ title: res.result?.error || '保存失败', icon: 'none' });
-        }
-      },
-      fail: err => {
-        wx.hideLoading();
-        wx.showToast({ title: '保存失败', icon: 'none' });
+    request('update-user-info', 'update', { nickname: nickname }).then(res => {
+      wx.hideLoading();
+      if (res.result && res.result.success) {
+        this.setData({
+          'userInfo.nickname': nickname,
+          showEditDialog: false
+        });
+        wx.showToast({ title: '保存成功', icon: 'success' });
+      } else {
+        wx.showToast({ title: res.result?.message || '保存失败', icon: 'none' });
       }
+    }).catch(err => {
+      wx.hideLoading();
+      wx.showToast({ title: '保存失败', icon: 'none' });
     });
+  },
+
+  // UX-16: 图片加载失败简单处理
+  onImgError(e) {
+    console.warn('图片加载失败', e && e.detail);
   }
 });

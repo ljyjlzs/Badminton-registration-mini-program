@@ -1,5 +1,5 @@
 {
-  "usingComponents": {
-    "score-slider": "/components/score-slider/score-slider"
-  }
+  "navigationBarTitleText": "记分",
+  "enablePullDownRefresh": true,
+  "usingComponents": {}
 }

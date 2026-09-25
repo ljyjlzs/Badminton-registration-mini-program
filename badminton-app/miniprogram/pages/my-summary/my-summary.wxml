@@ -1,0 +1,73 @@
+<view class="page-shell">
+  <view wx:if="{{loading}}" class="loading">
+    <view class="loading-spinner"></view>
+    <text>加载中...</text>
+  </view>
+
+  <view wx:elif="{{statCards.length === 0}}" class="empty-tip">
+    <text class="empty-icon">📊</text>
+    <text class="empty-text">暂无数据</text>
+    <text class="empty-desc">完成比赛后即可查看个人总结</text>
+  </view>
+
+  <view wx:else class="summary-content">
+    <view class="section-title">我的数据</view>
+    <view class="period-switch">
+      <view class="period-item {{period === 'season' ? 'selected' : ''}}" bindtap="switchPeriod" data-period="season">赛季</view>
+      <view class="period-item {{period === 'year' ? 'selected' : ''}}" bindtap="switchPeriod" data-period="year">年度</view>
+    </view>
+
+    <view class="stat-grid">
+      <view wx:for="{{statCards}}" wx:key="key" class="stat-card">
+        <text class="stat-label">{{item.label}}</text>
+        <text class="stat-value">{{item.value}}</text>
+        <text wx:if="{{item.sub}}" class="stat-sub">{{item.sub}}</text>
+      </view>
+    </view>
+
+    <view class="info-card">
+      <view class="info-row">
+        <text class="info-label">等级</text>
+        <text class="info-value">Lv.{{level}}</text>
+      </view>
+      <view class="info-row">
+        <text class="info-label">排名</text>
+        <text class="info-value">{{rank}}</text>
+      </view>
+      <view class="info-row">
+        <text class="info-label">历史活动</text>
+        <text class="info-value">{{activityCount}} 场</text>
+      </view>
+    </view>
+
+    <view wx:if="{{aiStyle}}" class="ai-style-card">
+      <view class="ai-style-header">
+        <text class="ai-style-icon">🤖</text>
+        <text class="ai-style-title">AI 风格分析</text>
+      </view>
+      <view class="ai-style-desc">{{aiStyle}}</view>
+    </view>
+
+    <view wx:if="{{badges.length > 0}}" class="badge-section">
+      <view class="section-title">我的成就</view>
+      <view class="badge-list">
+        <view wx:for="{{badges}}" wx:key="_id" class="badge-item badge-{{item.badgeCode}}">
+          <text class="badge-icon">{{badgeIconMap[item.badgeCode] || item.icon || '🏅'}}</text>
+          <text class="badge-name">{{item.title || item.name}}</text>
+        </view>
+      </view>
+    </view>
+    <view wx:else class="empty-tip">暂无徽章</view>
+
+    <!-- 排名趋势图 -->
+    <view wx:if="{{rankingTrend.length > 0}}" class="trend-section" style="margin-top: 24rpx; background: #fff; border-radius: 12rpx; padding: 24rpx;">
+      <view class="section-title" style="margin-bottom: 16rpx;">积分趋势</view>
+      <canvas canvas-id="trendChart" style="width: {{trendCanvasWidth}}px; height: {{trendCanvasHeight}}px; border-radius: 8rpx;"></canvas>
+    </view>
+
+    <view class="action-row">
+      <button class="action-btn copy-btn" bindtap="copyContent">复制数据</button>
+      <button class="action-btn share-btn" open-type="share">分享总结</button>
+    </view>
+  </view>
+</view>

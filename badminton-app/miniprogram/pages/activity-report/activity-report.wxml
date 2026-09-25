@@ -1,0 +1,94 @@
+<view class="page-shell">
+  <view wx:if="{{loading}}" class="loading">
+    <view class="loading-spinner"></view>
+    <text>加载战报...</text>
+  </view>
+
+  <view wx:elif="{{status === 'generating'}}" class="status-card">
+    <view class="loading-spinner"></view>
+    <view class="status-title">战报生成中</view>
+    <view class="status-desc">统计和文案正在整理，稍等片刻</view>
+  </view>
+
+  <view wx:elif="{{status === 'failed'}}" class="status-card">
+    <view class="status-icon">!</view>
+    <view class="status-title">生成失败</view>
+    <view class="status-desc">战报生成遇到问题，可以重新生成一次</view>
+    <button class="btn-regen" bindtap="regenerateReport" disabled="{{regenerating}}">
+      {{regenerating ? '生成中...' : '重新生成'}}
+    </button>
+  </view>
+
+  <view wx:elif="{{status === 'finished' && report}}" class="report-content">
+    <view class="report-hero">
+      <view class="report-status-badge status-{{report.status}}">{{report.statusText}}</view>
+      <text class="report-title">{{report.activityName}}</text>
+      <text class="report-subtitle">{{report.location}} · {{report.time}}</text>
+    </view>
+
+    <view class="stat-cards">
+      <view class="stat-card">
+        <text class="stat-num">{{report.totalPlayers}}</text>
+        <text class="stat-label">参与人数</text>
+      </view>
+      <view class="stat-card">
+        <text class="stat-num">{{report.finishedMatches}}/{{report.totalMatches}}</text>
+        <text class="stat-label">完成场次</text>
+      </view>
+      <view class="stat-card">
+        <text class="stat-num">{{report.totalScore}}</text>
+        <text class="stat-label">总得分</text>
+      </view>
+    </view>
+
+    <view class="info-card">
+      <view class="info-row">
+        <text class="info-label">活动类型</text>
+        <text class="info-value">{{report.type}}</text>
+      </view>
+      <view class="info-row">
+        <text class="info-label">活动时间</text>
+        <text class="info-value">{{report.time}}</text>
+      </view>
+      <view class="info-row">
+        <text class="info-label">活动地点</text>
+        <text class="info-value">{{report.location}}</text>
+      </view>
+    </view>
+
+    <view class="report-btns">
+      <button class="btn-share" bindtap="shareReport">分享报告</button>
+      <button class="btn-regenerate" bindtap="regenerateReport">重新生成</button>
+    </view>
+
+    <button wx:if="{{report && report.content}}" class="btn-copy-report" bindtap="copyReport" style="margin-top: 16rpx; background: #f0f7f4; color: #0ea56b; border-radius: 999rpx; font-size: 28rpx;">复制全文</button>
+  </view>
+
+  <view wx:elif="{{status === 'none'}}" class="status-card">
+    <view class="status-icon">📊</view>
+    <view class="status-title">战报还未生成</view>
+    <view class="status-desc">活动结束后将自动生成战报</view>
+  </view>
+
+  <view wx:else class="status-card">
+    <view class="status-icon">📄</view>
+    <view class="status-title">暂无战报</view>
+    <view class="status-desc">暂时没有可展示的战报内容</view>
+  </view>
+
+  <view wx:if="{{badges.length > 0}}" class="badge-section">
+    <view class="section-title">荣誉徽章</view>
+    <view class="badge-list">
+      <view wx:for="{{badges}}" wx:key="id" class="badge-item">
+        <text class="badge-icon">{{item.icon}}</text>
+        <text class="badge-name">{{item.title}}</text>
+        <text class="badge-desc">{{item.description}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="summary-entry" bindtap="goToMySummary">
+    <text class="summary-entry-title">查看我的赛季总结</text>
+    <text class="summary-entry-arrow">›</text>
+  </view>
+</view>

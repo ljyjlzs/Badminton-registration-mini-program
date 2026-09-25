@@ -1,0 +1,70 @@
+.page-shell { padding: 24rpx; }
+.empty-state { text-align: center; padding: 120rpx 40rpx; }
+.empty-icon { font-size: 80rpx; display: block; margin-bottom: 20rpx; }
+.empty-text { font-size: 32rpx; font-weight: 700; color: #1f2d29; display: block; }
+.empty-desc { font-size: 26rpx; color: #84938e; display: block; margin-top: 12rpx; }
+.match-list { display: flex; flex-direction: column; gap: 20rpx; }
+.match-card { background: #fff; border-radius: 20rpx; padding: 24rpx; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.05); }
+.match-header { display: flex; align-items: center; gap: 12rpx; margin-bottom: 16rpx; }
+.match-court { font-size: 28rpx; font-weight: 700; color: #0ea56b; }
+.match-round { font-size: 24rpx; color: #84938e; }
+.match-status { margin-left: auto; font-size: 22rpx; padding: 6rpx 16rpx; border-radius: 999rpx; font-weight: 600; }
+.status-pending { background: #fff3e0; color: #e67e00; }
+.status-in_progress { background: #e8f5e9; color: #2e7d32; }
+.status-finished { background: #f0f0f0; color: #888; }
+.match-teams { display: flex; align-items: center; gap: 16rpx; }
+.team-block { flex: 1; text-align: center; }
+.team-names { display: block; font-size: 26rpx; font-weight: 600; color: #1f2d29; word-break: break-all; }
+.team-score { display: block; font-size: 36rpx; font-weight: 800; color: #0ea56b; margin-top: 8rpx; }
+.vs-divider { font-size: 24rpx; font-weight: 700; color: #ccc; flex-shrink: 0; }
+.match-footer { margin-top: 16rpx; text-align: center; }
+.btn-score { background: #0ea56b; color: #fff; font-size: 26rpx; border-radius: 999rpx; padding: 16rpx 0; }
+
+/* ===== T15 拖拽排序 ===== */
+.match-order-tip {
+  background: #f9fffc;
+  border-radius: 12rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 16rpx;
+}
+.match-order-tip-text { font-size: 24rpx; color: #84938e; }
+
+.drag-match-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+.drag-match-item {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.06);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.drag-match-item.dragging {
+  opacity: 0.85;
+  box-shadow: 0 8rpx 24rpx rgba(0,0,0,0.15);
+  transform: scale(1.02);
+  z-index: 10;
+}
+.drag-handle {
+  font-size: 32rpx;
+  color: #ccc;
+  margin-right: 16rpx;
+  flex-shrink: 0;
+}
+.drag-match-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+.drag-match-court { font-size: 26rpx; font-weight: 700; color: #0ea56b; }
+.drag-match-teams { font-size: 24rpx; color: #1f2d29; }
+.drag-match-status { font-size: 22rpx; color: #84938e; }
+.drag-match-order { font-size: 28rpx; font-weight: 700; color: #ccc; margin-left: 12rpx; flex-shrink: 0; }
+
+.status-playing { background: #e8f5e9; color: #2e7d32; }
+.status-confirming { background: #fff3e0; color: #e67e00; }

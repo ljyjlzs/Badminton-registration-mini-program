@@ -1,0 +1,64 @@
+<view class="settings-page">
+  <view wx:if="{{loading}}" class="settings-loading">
+    <text style="color:#8d9a95">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <view class="detail-section">
+      <text class="section-title">语音计分配置</text>
+      <view class="setting-row">
+        <text class="setting-label">语音计分</text>
+        <switch checked="{{enabled}}" bindchange="toggleVoice" color="#0ea56b" />
+      </view>
+      <view class="setting-row">
+        <text class="setting-label">状态</text>
+        <text class="status-tag {{enabled ? 'status-on' : 'status-off'}}">{{enabled ? '已开启' : '已关闭'}}</text>
+      </view>
+    </view>
+
+    <view class="detail-section" wx:if="{{config}}">
+      <text class="section-title">参数说明</text>
+      <view class="setting-row">
+        <text class="setting-label">最大时长</text>
+        <text class="setting-value">{{config.maxDurationSeconds || 60}}秒</text>
+      </view>
+      <view class="setting-row">
+        <text class="setting-label">最大文件</text>
+        <text class="setting-value">{{config.maxFileSizeBytes ? (config.maxFileSizeBytes / 1024 / 1024) : 2}}MB</text>
+      </view>
+      <view class="setting-row">
+        <text class="setting-label">接受格式</text>
+        <text class="setting-value">{{formatsText}}</text>
+      </view>
+      <view class="setting-row">
+        <text class="setting-label">用户配额</text>
+        <text class="setting-value">{{config.remainingQuota || '不限'}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{!enabled && disabledReason}}" class="reason-tip">
+      提示：{{disabledReason === 'OFF' ? '语音计分功能未开启' : disabledReason === 'NOT_CONFIGURED' ? '语音服务未配置' : '识别次数已达上限'}}
+    </view>
+
+    <!-- BUG-17: 天气/语音记分测试/隐私政策/用户协议入口（此前注册但零导航） -->
+    <view class="detail-section">
+      <text class="section-title">更多</text>
+      <view class="setting-row" bindtap="goWeather">
+        <text class="setting-label">天气</text>
+        <text style="color: #999; font-size: 28rpx;">›</text>
+      </view>
+      <view class="setting-row" bindtap="goVoiceScoreTest">
+        <text class="setting-label">语音记分测试</text>
+        <text style="color: #999; font-size: 28rpx;">›</text>
+      </view>
+      <view class="setting-row" bindtap="goPrivacy">
+        <text class="setting-label">隐私政策</text>
+        <text style="color: #999; font-size: 28rpx;">›</text>
+      </view>
+      <view class="setting-row" bindtap="goAgreement">
+        <text class="setting-label">用户协议</text>
+        <text style="color: #999; font-size: 28rpx;">›</text>
+      </view>
+    </view>
+  </block>
+</view>

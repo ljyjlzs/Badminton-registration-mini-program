@@ -107,7 +107,7 @@
     </view>
 
     <view wx:if="{{loading}}" class="loading-tip">AI 思考中...</view>
-    <view id="msg-bottom-" style="height:1rpx;"></view>
+    <view id="msg-bottom" style="height:1rpx;"></view>
   </scroll-view>
 
   <!-- 底部输入区 -->

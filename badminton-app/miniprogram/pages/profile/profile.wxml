@@ -1,0 +1,82 @@
+<view class="profile-page">
+  <view wx:if="{{loading}}" class="profile-loading">
+    <text style="color:#8d9a95">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <view class="profile-card" wx:if="{{user}}">
+      <view class="profile-avatar">{{user.nickname ? user.nickname[0] : '球'}}</view>
+      <view class="profile-info">
+        <view class="profile-name">{{user.nickname || '球友'}}</view>
+        <view class="profile-level">等级 Lv.{{user.level || 5}}</view>
+        <view class="profile-rating">水平分 {{user.rating || 1000}}</view>
+      </view>
+    </view>
+
+    <view class="stats-grid">
+      <view class="stat-item">
+        <text class="stat-value">{{activities.length}}</text>
+        <text class="stat-label">参与活动</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-value">{{user.level || 5}}</text>
+        <text class="stat-label">等级</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-value">{{user.rating || 1000}}</text>
+        <text class="stat-label">水平分</text>
+      </view>
+    </view>
+
+    <!-- 我的总结入口 -->
+    <view class="detail-section" bindtap="goToSummary" style="cursor: pointer;">
+      <view style="display: flex; justify-content: space-between; align-items: center;">
+        <text class="section-title">我的总结</text>
+        <text style="color: #999; font-size: 28rpx;">›</text>
+      </view>
+      <view style="color: #666; font-size: 24rpx; margin-top: 8rpx;">查看赛季数据、徽章、历史记录</view>
+    </view>
+
+    <!-- 徽章展示 -->
+    <view class="detail-section">
+      <text class="section-title">我的徽章</text>
+      <block wx:if="{{badges.length > 0}}">
+        <view class="badge-list" style="display: flex; flex-wrap: wrap; gap: 16rpx; margin-top: 16rpx;">
+          <view wx:for="{{badges}}" wx:key="_id" class="badge-item" style="background: #f5f5f5; border-radius: 12rpx; padding: 16rpx; min-width: 140rpx; text-align: center;">
+            <view style="font-size: 48rpx;">{{badgeIcons[item.badgeCode] || '🏅'}}</view>
+            <view style="font-size: 24rpx; font-weight: bold; margin-top: 8rpx;">{{item.title}}</view>
+            <view style="font-size: 20rpx; color: #999; margin-top: 4rpx;">{{item.description}}</view>
+          </view>
+        </view>
+      </block>
+      <view wx:else class="empty-tip">暂无徽章</view>
+    </view>
+
+    <view class="detail-section">
+      <text class="section-title">我的活动</text>
+      <block wx:if="{{activities.length > 0}}">
+        <view class="activity-item" wx:for="{{activities}}" wx:key="id" data-id="{{item.id}}" bindtap="goToDetail">
+          <view>
+            <view class="act-name">{{item.name}}</view>
+            <view class="act-meta">{{item.time}} · {{item.location}}</view>
+          </view>
+          <text class="act-status {{item.status}}">{{item.status === 'registering' ? '报名中' : item.status === 'grouping' ? '分组中' : item.status === 'playing' ? '进行中' : item.status === 'finished' ? '已结束' : item.status}}</text>
+        </view>
+      </block>
+      <view wx:else class="empty-tip">暂无活动记录</view>
+    </view>
+
+    <!-- BUG-17: 隐私政策/用户协议入口（此前注册但零导航） -->
+    <view class="detail-section">
+      <text class="section-title">服务与条款</text>
+      <view class="activity-item" bindtap="goPrivacy">
+        <text class="act-name">隐私政策</text>
+        <text style="color: #999; font-size: 28rpx;">›</text>
+      </view>
+      <view class="activity-item" bindtap="goAgreement">
+        <text class="act-name">用户协议</text>
+        <text style="color: #999; font-size: 28rpx;">›</text>
+      </view>
+    </view>
+  </block>
+</view>

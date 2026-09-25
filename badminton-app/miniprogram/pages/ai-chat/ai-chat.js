@@ -1,5 +1,6 @@
 // pages/ai-chat/ai-chat.js
 const app = getApp();
+const { request } = require('../../utils/request.js');
 
 Page({
   data: {
@@ -9,6 +10,9 @@ Page({
     loadingHistory: false,
     scrollToView: ''
   },
+
+  // AI-33: 请求序号，初始化放在生命周期外避免被 setData 序列化
+  _aiSeq: 0,
 
   onShow: function() {
     // 授权拦截：未登录则跳回首页
@@ -36,7 +40,10 @@ Page({
       });
       return;
     }
-    this.loadHistory();
+    // PERF-26: 仅脏标记或首次进入时刷新历史
+    if (this._historyDirty || !this._historyLoaded) {
+      this.loadHistory();
+    }
   },
 
   // ======================================================
@@ -44,23 +51,36 @@ Page({
   // ======================================================
   loadHistory: function() {
     this.setData({ loadingHistory: true });
-    wx.cloud.callFunction({
-      name: 'ai-history',
-      data: { action: 'get' },
-      success: res => {
-        this.setData({ loadingHistory: false });
-        if (res.result && res.result.success) {
-          const msgs = (res.result.data || [])
-            .filter(m => m.role !== 'system_feedback') // 不显示系统反馈
-            .map(m => this._parseMessage(m));
-          this.setData({ messages: msgs });
-          this.scrollToBottom('');
-        }
-      },
-      fail: () => {
-        this.setData({ loadingHistory: false });
+    request('ai-history', 'get', {}).then(res => {
+      this.setData({ loadingHistory: false });
+      if (res.result && res.result.success) {
+        const msgs = (res.result.data || [])
+          // i=134: 统一过滤 system_feedback 与历史遗留的 __system_feedback
+          .filter(m => m.role !== 'system_feedback' && m.role !== '__system_feedback')
+          .map(m => this._parseMessage(m));
+        this.setData({ messages: msgs });
+        this._historyDirty = false;
+        this._historyLoaded = true;
+        this.scrollToBottom();
       }
+    }).catch(() => {
+      this.setData({ loadingHistory: false });
     });
+  },
+
+  // PERF-28: 路径式追加单条消息，避免整段序列化 messages
+  _appendMessage: function(msg) {
+    const n = this.data.messages.length;
+    const patch = {};
+    patch['messages[' + n + ']'] = msg;
+    this.setData(patch);
+  },
+
+  // PERF-28: 路径式更新指定下标消息
+  _updateMessageAt: function(idx, msg) {
+    const patch = {};
+    patch['messages[' + idx + ']'] = msg;
+    this.setData(patch);
   },
 
   // ======================================================
@@ -69,31 +89,49 @@ Page({
   _parseMessage: function(m) {
     const base = {
       ...m,
-      timeStr: this.formatTime(m.created_at),
+      timeStr: this.formatTime(m.createdAt || m.created_at),
       hasAction: false,
       actionData: null,
       hasSelect: false,
       selectOptions: [],
       displayContent: m.content,
-      actionStatus: '' // '' | 'pending' | 'confirmed' | 'cancelled' | 'executing' | 'success' | 'error'
+      actionStatus: m.actionStatus || '' // '' | 'pending' | 'confirmed' | 'cancelled' | 'executing' | 'success' | 'error'
     };
 
     if (m.role !== 'assistant') return base;
+    // AI-3: 空 content 保护，防止 TypeError
+    if (!m.content) return base;
+
+    // i=152: 解析失败时隐藏原始协议标记，显示友好提示
+    const stripProtocolMarkers = function(text) {
+      return (text || '')
+        .replace(/__SELECT__[\s\S]*?__END__/g, '')
+        .replace(/__ACTION__[\s\S]*?__END__/g, '')
+        .trim();
+    };
 
     // 匹配 __SELECT__[...]__END__（活动选择列表）
     const selectMatch = m.content.match(/__SELECT__(\[[\s\S]*?\])__END__/);
     if (selectMatch) {
       try {
         const selectOptions = JSON.parse(selectMatch[1]);
-        const displayContent = m.content.replace(/__SELECT__[\s\S]*?__END__/, '').trim();
+        if (Array.isArray(selectOptions) && selectOptions.length > 0) {
+          const displayContent = m.content.replace(/__SELECT__[\s\S]*?__END__/, '').trim();
+          return {
+            ...base,
+            hasSelect: true,
+            selectOptions: selectOptions,
+            displayContent: displayContent
+          };
+        }
+        // i=154: 空列表不渲染空卡片
         return {
           ...base,
-          hasSelect: true,
-          selectOptions: selectOptions,
-          displayContent: displayContent
+          displayContent: stripProtocolMarkers(m.content) || '（暂无可选活动）'
         };
       } catch (e) {
-        // 解析失败，继续尝试 ACTION
+        // 解析失败，去掉原始标记后继续尝试 ACTION
+        base.displayContent = stripProtocolMarkers(m.content) || '（消息内容解析失败）';
       }
     }
 
@@ -110,11 +148,26 @@ Page({
         hasAction: true,
         actionData: actionData,
         displayContent: displayContent,
-        actionStatus: 'pending'
+        // AI-10: 优先读持久化的 actionStatus，避免历史重载后重置为 pending
+        actionStatus: m.actionStatus || 'pending'
       };
     } catch (e) {
-      return base;
+      // i=152: JSON 解析失败，不把 __ACTION__{...}__END__ 原始标记渲染给用户
+      return {
+        ...base,
+        displayContent: stripProtocolMarkers(m.content) || '（操作卡片解析失败，请重新发送指令）'
+      };
     }
+  },
+
+  // AI-10: 将 actionStatus/actionResultText 持久化到 ai_messages（仅数据库消息）
+  _persistActionStatus: function(msg, status, resultText) {
+    if (!msg || !msg._id) return;
+    const id = String(msg._id);
+    if (id.indexOf('tmp_') === 0 || id.indexOf('ai_') === 0 || id.indexOf('err_') === 0 || id.indexOf('select_') === 0) {
+      return;
+    }
+    request('ai-history', 'updateActionStatus', { messageId: id, actionStatus: status, actionResultText: resultText || '' }).catch(function() {});
   },
 
   // ======================================================
@@ -143,85 +196,89 @@ Page({
 
     this.setData({
       inputValue: '',
-      loading: true,
-      messages: [...this.data.messages, userMsg]
+      loading: true
     });
-    this.scrollToBottom(String(Date.now()));
+    this._appendMessage(userMsg);
+    this.scrollToBottom();
 
-    this._callAI({ message: content });
+    // D-2: 传递多轮上下文 history 给 AI
+    const history = this.data.messages
+      .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.content && !String(m._id).startsWith('tmp_'))
+      .slice(-20)
+      .map(m => ({ role: m.role, content: String(m.content).slice(0, 2000) }));
+    this._callAI({ message: content, history: history });
   },
 
   // ======================================================
-  // 调用 AI 云函数（带超时处理）
+  // 调用 AI 云函数（带超时处理 + 请求序号失效判断）
   // ======================================================
   _callAI: function(params) {
+    // AI-33: 请求序号，超时后迟到结果不再插入
+    const seq = ++this._aiSeq;
     // 设置超时处理（30秒）
     const timeoutId = setTimeout(() => {
-      if (this.data.loading) {
+      if (seq === this._aiSeq && this.data.loading) {
+        this._aiSeq++;
         this.setData({ loading: false });
         wx.showToast({ title: 'AI响应超时，请重试', icon: 'none', duration: 3000 });
       }
     }, 30000);
 
-    wx.cloud.callFunction({
-      name: 'ai-chat',
-      data: params,
-      success: res => {
-        clearTimeout(timeoutId);
-        this.setData({ loading: false });
-        if (res.result && res.result.success) {
-          const raw = {
-            _id: 'ai_' + Date.now(),
-            role: 'assistant',
-            content: res.result.data.content,
-            created_at: null
-          };
-          const aiMsg = this._parseMessage(raw);
-          aiMsg.timeStr = '刚刚';
-          this.setData({
-            messages: [...this.data.messages, aiMsg]
-          });
-          this.scrollToBottom(String(Date.now()));
-        } else {
-          // 显示错误信息，但不阻断对话
-          const errorMsg = res.result?.error || '发送失败';
-          wx.showToast({ title: errorMsg, icon: 'none', duration: 3000 });
-          // 添加错误提示消息
-          const errMsg = {
-            _id: 'err_' + Date.now(),
-            role: 'assistant',
-            content: '抱歉，AI暂时无法响应：' + errorMsg,
-            displayContent: '抱歉，AI暂时无法响应：' + errorMsg,
-            hasAction: false,
-            hasSelect: false,
-            actionStatus: '',
-            timeStr: '刚刚'
-          };
-          this.setData({
-            messages: [...this.data.messages, errMsg]
-          });
-        }
-      },
-      fail: err => {
-        clearTimeout(timeoutId);
-        this.setData({ loading: false });
-        console.error('ai-chat 云函数调用失败:', err);
-        wx.showToast({ title: '网络错误，请检查网络后重试', icon: 'none', duration: 3000 });
-        // 添加网络错误提示消息
+    request('ai-chat', 'chat', params).then(res => {
+      clearTimeout(timeoutId);
+      // AI-33: 已超时或已有更新请求时丢弃迟到结果
+      if (seq !== this._aiSeq) return;
+      this.setData({ loading: false });
+      if (res.result && res.result.success) {
+        const d = res.result.data || {};
+        const raw = {
+          _id: d.assistantMessageId || ('ai_' + Date.now()),
+          role: 'assistant',
+          content: d.content || d.reply || '',
+          actionStatus: d.actionStatus || '',
+          created_at: null
+        };
+        const aiMsg = this._parseMessage(raw);
+        aiMsg.timeStr = '刚刚';
+        this._appendMessage(aiMsg);
+        this._historyDirty = true;
+        this.scrollToBottom();
+      } else {
+        // 显示错误信息，但不阻断对话
+        const errorMsg = res.result?.message || '发送失败';
+        wx.showToast({ title: errorMsg, icon: 'none', duration: 3000 });
+        // 添加错误提示消息
         const errMsg = {
           _id: 'err_' + Date.now(),
           role: 'assistant',
-          content: '网络连接失败，请检查网络后重试。',
-          displayContent: '网络连接失败，请检查网络后重试。',
+          content: '抱歉，AI暂时无法响应：' + errorMsg,
+          displayContent: '抱歉，AI暂时无法响应：' + errorMsg,
           hasAction: false,
           hasSelect: false,
           actionStatus: '',
           timeStr: '刚刚'
         };
-        this.setData({
-          messages: [...this.data.messages, errMsg]
-        });
+        this._appendMessage(errMsg);
       }
+    }).catch(err => {
+      clearTimeout(timeoutId);
+      // AI-33: 丢弃迟到的错误结果
+      if (seq !== this._aiSeq) return;
+      this.setData({ loading: false });
+      console.error('ai-chat 云函数调用失败:', err);
+      wx.showToast({ title: '网络错误，请检查网络后重试', icon: 'none', duration: 3000 });
+      // 添加网络错误提示消息
+      const errMsg = {
+        _id: 'err_' + Date.now(),
+        role: 'assistant',
+        content: '网络连接失败，请检查网络后重试。',
+        displayContent: '网络连接失败，请检查网络后重试。',
+        hasAction: false,
+        hasSelect: false,
+        actionStatus: '',
+        timeStr: '刚刚'
+      };
+      this._appendMessage(errMsg);
     });
   },
 
@@ -238,9 +295,9 @@ Page({
     const actionType = action.action;
 
     // 更新状态为执行中
-    const newMessages = [...messages];
-    newMessages[idx] = { ...msg, actionStatus: 'executing' };
-    this.setData({ messages: newMessages });
+    const newMsg = { ...msg, actionStatus: 'executing' };
+    this._updateMessageAt(idx, newMsg);
+    this._persistActionStatus(newMsg, 'executing');
 
     // 根据操作类型执行
     if (actionType === 'create_activity') {
@@ -263,13 +320,20 @@ Page({
     const msg = messages[idx];
     if (!msg || !msg.hasAction) return;
 
-    const newMessages = [...messages];
-    newMessages[idx] = { ...msg, actionStatus: 'cancelled' };
-    this.setData({ messages: newMessages, loading: true });
+    const newMsg = { ...msg, actionStatus: 'cancelled' };
+    this._updateMessageAt(idx, newMsg);
+    this.setData({ loading: true });
+    this._persistActionStatus(newMsg, 'cancelled');
 
-    // 告知 AI 操作已取消
-    const cancelText = '[系统通知] 用户取消了操作：' + (msg.actionData.confirm_text || msg.actionData.action);
-    this._callAI({ action_result: cancelText });
+    // AI-33: 使旧请求失效；AI-20: 带上 activityId
+    this._aiSeq++;
+    const params = (msg.actionData && msg.actionData.params) || {};
+    const hist1 = this.data.messages.filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.content && !String(m._id).startsWith('tmp_')).slice(-20).map(m => ({ role: m.role, content: String(m.content).slice(0, 2000) }));
+    this._callAI({
+      message: '[系统通知] 用户取消了操作：' + (msg.actionData.confirm_text || msg.actionData.action),
+      activityId: params.activityId || '',
+      history: hist1
+    });
   },
 
   // ======================================================
@@ -294,13 +358,12 @@ Page({
       actionStatus: '',
       timeStr: '刚刚'
     };
-    this.setData({
-      messages: [...this.data.messages, userMsg]
-    });
-    this.scrollToBottom(String(Date.now()));
+    this._appendMessage(userMsg);
+    this.scrollToBottom();
 
     // 调用AI，让AI生成操作块
-    this._callAI({ message: selectText });
+    const hist2 = this.data.messages.filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.content && !String(m._id).startsWith('tmp_')).slice(-20).map(m => ({ role: m.role, content: String(m.content).slice(0, 2000) }));
+    this._callAI({ message: selectText, history: hist2 });
   },
 
   // ======================================================
@@ -313,24 +376,23 @@ Page({
       timeMs = new Date(timeMs).getTime();
     }
 
-    wx.cloud.callFunction({
-      name: 'create-activity',
-      data: {
-        name: params.name,
-        time: timeMs,
-        location: params.location,
-        type: params.type || 'doubles'
-      },
-      success: res => {
-        if (res.result && res.result.success) {
-          this._finishAction(idx, true, '活动「' + params.name + '」创建成功！活动ID：' + res.result.data.activityId);
-        } else {
-          this._finishAction(idx, false, '创建活动失败：' + (res.result?.error || '未知错误'));
-        }
-      },
-      fail: err => {
-        this._finishAction(idx, false, '创建活动失败：' + (err.errMsg || '网络错误'));
+    request('create-activity', 'create', {
+      name: params.name,
+      time: timeMs,
+      location: params.location,
+      type: params.type || 'doubles',
+      province: '',
+      city: '',
+      district: ''
+    }).then(res => {
+      if (res.result && res.result.success) {
+        const newActId = (res.result.data && res.result.data.activityId) || '';
+        this._finishAction(idx, true, '活动「' + params.name + '」创建成功！活动ID：' + newActId, newActId);
+      } else {
+        this._finishAction(idx, false, '创建活动失败：' + (res.result?.message || '未知错误'), '');
       }
+    }).catch(err => {
+      this._finishAction(idx, false, '创建活动失败：' + (err.errMsg || '网络错误'), '');
     });
   },
 
@@ -356,60 +418,21 @@ Page({
       return;
     }
 
-    wx.cloud.callFunction({
-      name: 'join-activity',
-      data: {
-        activityId: params.activityId || '',
-        activityName: params.activityName || '',
-        nickname: userInfo.nickname,
-        level: userInfo.level || 5,
-        avatar: userInfo.avatar || ('avatar_' + (userInfo.nickname || '?').charAt(0))
-      },
-      success: res => {
-        if (res.result && res.result.success) {
-          this._finishAction(idx, true, '已成功报名参加活动「' + params.activityName + '」！');
-        } else if (res.result && res.result.error === 'MULTIPLE_MATCHES' && res.result.data && res.result.data.matches) {
-          // 多个匹配结果，渲染选择卡片
-          this._handleMultipleMatches(idx, res.result.data.matches);
-        } else {
-          this._finishAction(idx, false, '报名失败：' + (res.result?.error || '未知错误'));
-        }
-      },
-      fail: err => {
-        this._finishAction(idx, false, '报名失败：' + (err.errMsg || '网络错误'));
+    request('join-activity', 'join', {
+      activityId: params.activityId || '',
+      activityName: params.activityName || '',
+      nickname: userInfo.nickname,
+      level: userInfo.level || 5,
+      avatar: userInfo.avatar || ('avatar_' + (userInfo.nickname || '?').charAt(0))
+    }).then(res => {
+      if (res.result && res.result.success) {
+        this._finishAction(idx, true, '已成功报名参加活动「' + params.activityName + '」！', params.activityId);
+      } else {
+        this._finishAction(idx, false, '报名失败：' + (res.result?.message || '未知错误'), params.activityId);
       }
+    }).catch(err => {
+      this._finishAction(idx, false, '报名失败：' + (err.errMsg || '网络错误'), params.activityId);
     });
-  },
-
-  // ======================================================
-  // 处理多匹配结果：渲染选择卡片
-  // ======================================================
-  _handleMultipleMatches: function(idx, matches) {
-    const messages = this.data.messages;
-    const newMessages = [...messages];
-
-    // 移除原来的操作卡片，替换为选择卡片
-    const selectMsg = {
-      _id: 'select_' + Date.now(),
-      role: 'assistant',
-      content: '',
-      displayContent: '我找到了以下可报名的活动，请选择：',
-      hasAction: false,
-      hasSelect: true,
-      selectOptions: matches.map(m => ({
-        id: m.id,
-        name: m.name,
-        time: this.formatTime(m.time),
-        location: m.location || '待定'
-      })),
-      actionStatus: '',
-      timeStr: '刚刚'
-    };
-
-    // 替换原来的消息
-    newMessages[idx] = selectMsg;
-    this.setData({ messages: newMessages, loading: false });
-    this.scrollToBottom(String(Date.now()));
   },
 
   // ======================================================
@@ -426,49 +449,48 @@ Page({
       this._finishAction(idx, false, '操作失败：缺少活动ID和活动名称');
       return;
     }
-    wx.cloud.callFunction({
-      name: 'cancel-registration',
-      data: {
-        activityId: params.activityId || '',
-        activityName: params.activityName || ''
-      },
-      success: res => {
-        if (res.result && res.result.success) {
-          this._finishAction(idx, true, '已提交取消报名申请（活动：「' + params.activityName + '」），等待组织者审批。');
-        } else {
-          this._finishAction(idx, false, '取消报名失败：' + (res.result?.error || '未知错误'));
-        }
-      },
-      fail: err => {
-        this._finishAction(idx, false, '取消报名失败：' + (err.errMsg || '网络错误'));
+    request('cancel-registration', 'cancel', {
+      activityId: params.activityId || '',
+      activityName: params.activityName || ''
+    }).then(res => {
+      if (res.result && res.result.success) {
+        this._finishAction(idx, true, '已提交取消报名申请（活动：「' + params.activityName + '」），等待组织者审批。', params.activityId);
+      } else {
+        this._finishAction(idx, false, '取消报名失败：' + (res.result?.message || '未知错误'), params.activityId);
       }
+    }).catch(err => {
+      this._finishAction(idx, false, '取消报名失败：' + (err.errMsg || '网络错误'), params.activityId);
     });
   },
 
   // ======================================================
   // 操作完成：更新状态 + 反馈给 AI
   // ======================================================
-  _finishAction: function(idx, success, resultText) {
-    const messages = this.data.messages;
-    const newMessages = [...messages];
-    newMessages[idx] = {
-      ...messages[idx],
-      actionStatus: success ? 'success' : 'error',
+  _finishAction: function(idx, success, resultText, activityId) {
+    const finalStatus = success ? 'success' : 'error';
+    const updated = {
+      ...this.data.messages[idx],
+      actionStatus: finalStatus,
       actionResultText: resultText
     };
-    this.setData({ messages: newMessages, loading: true });
+    this._updateMessageAt(idx, updated);
+    this.setData({ loading: true });
+    this._persistActionStatus(updated, finalStatus, resultText);
 
-    // 把操作结果告知 AI，让 AI 继续回复
-    this._callAI({ action_result: resultText });
+    // AI-33: 使旧请求失效，防止超时后的迟到结果插入
+    this._aiSeq++;
+    // 把操作结果告知 AI，让 AI 继续回复；AI-20: 带上 activityId 供级联清理
+    const hist3 = this.data.messages.filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.content && !String(m._id).startsWith('tmp_')).slice(-20).map(m => ({ role: m.role, content: String(m.content).slice(0, 2000) }));
+    this._callAI({ message: '[系统通知] 操作执行结果：' + resultText, activityId: activityId || '', history: hist3 });
   },
 
   // ======================================================
-  // 滚动到底部
+  // 滚动到底部（AI-11：固定 id，不带时间戳后缀）
   // ======================================================
-  scrollToBottom: function(suffix) {
+  scrollToBottom: function() {
     this.setData({ scrollToView: '' });
     setTimeout(() => {
-      this.setData({ scrollToView: 'msg-bottom-' + suffix });
+      this.setData({ scrollToView: 'msg-bottom' });
     }, 100);
   },
 
@@ -496,18 +518,21 @@ Page({
       content: '确定要清空所有聊天记录，开始新对话吗？',
       success: res => {
         if (res.confirm) {
-          wx.cloud.callFunction({
-            name: 'ai-history',
-            data: { action: 'clear' },
-            success: res => {
-              if (res.result && res.result.success) {
-                this.setData({ messages: [] });
-                wx.showToast({ title: '已开始新对话', icon: 'success' });
-              }
+          request('ai-history', 'clear', {}).then(res => {
+            if (res.result && res.result.success) {
+              this.setData({ messages: [] });
+              wx.showToast({ title: '已开始新对话', icon: 'success' });
             }
           });
         }
       }
     });
+  },
+
+  onShareAppMessage: function() {
+    return {
+      title: '羽毛球 AI 助手',
+      path: '/pages/ai-chat/ai-chat'
+    };
   }
 });

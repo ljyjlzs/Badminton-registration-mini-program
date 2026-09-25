@@ -77,4 +77,9 @@
     <text class="empty-icon">📄</text>
     <text class="empty-text">暂无规则数据</text>
   </view>
+
+  <!-- AI 问答入口 -->
+  <view class="bottom-bar" style="padding: 24rpx;">
+    <button class="btn-primary" bindtap="goToRulesQa">AI 规则问答</button>
+  </view>
 </view>

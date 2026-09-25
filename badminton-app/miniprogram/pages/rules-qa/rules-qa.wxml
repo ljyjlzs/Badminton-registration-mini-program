@@ -1,0 +1,53 @@
+<view class="page-shell">
+  <view class="qa-hero" style="padding: 30rpx 24rpx; background: linear-gradient(135deg, #0ea56b, #0b8f61); border-radius: 20rpx; margin-bottom: 24rpx; text-align: center;">
+    <text style="font-size: 36rpx; font-weight: 800; color: #fff; display: block;">AI 规则问答</text>
+    <text style="font-size: 26rpx; color: rgba(255,255,255,0.8); display: block; margin-top: 8rpx;">有任何规则问题都可以问我</text>
+  </view>
+
+  <scroll-view class="chat-list" scroll-y scroll-into-view="{{scrollToId}}" style="height: 55vh; padding: 0 16rpx;">
+    <view id="msg-{{index}}" wx:for="{{messages}}" wx:key="index" style="margin-bottom: 20rpx;">
+      <view wx:if="{{item.role === 'user'}}" style="display: flex; justify-content: flex-end;">
+        <view style="background: #0ea56b; color: #fff; padding: 16rpx 24rpx; border-radius: 20rpx 20rpx 4rpx 20rpx; max-width: 80%; font-size: 28rpx; line-height: 1.5;">{{item.content}}</view>
+      </view>
+      <view wx:else style="display: flex; justify-content: flex-start; flex-direction: column; align-items: flex-start;">
+        <!-- AI-38: 兜底横幅 -->
+        <view wx:if="{{item.isFallback}}" class="fallback-banner">规则原文未提及，以下为兜底说明</view>
+        <!-- AI-38: 失败/错误气泡支持点击重试 -->
+        <view wx:if="{{item.isError}}" class="error-bubble" bindtap="retry" data-question="{{item.question}}">
+          <text user-select decode="{{true}}">{{item.content}}</text>
+          <text class="error-retry-hint">点击重试</text>
+        </view>
+        <text wx:else user-select decode="{{true}}" style="background: #f0f7f4; color: #1f2d29; padding: 16rpx 24rpx; border-radius: 20rpx 20rpx 20rpx 4rpx; max-width: 80%; font-size: 28rpx; line-height: 1.5; white-space: pre-wrap;">{{item.content}}</text>
+        <!-- AI-38: 显示规则出处引用 -->
+        <view wx:if="{{item.references && item.references.length}}" style="margin-top: 8rpx; max-width: 80%;">
+          <view wx:for="{{item.references}}" wx:for-item="ref" wx:key="index" style="background: #e8f5ef; color: #0b8f61; padding: 8rpx 16rpx; border-radius: 12rpx; margin-top: 6rpx; font-size: 24rpx;">
+            <text>出处：第{{ref.sectionId}}条</text>
+            <view wx:if="{{ref.quotes && ref.quotes.length}}" style="color: #4a6b60; margin-top: 4rpx;">
+              <text wx:for="{{ref.quotes}}" wx:for-item="q" wx:for-index="qi" wx:key="qi" style="display: block;">「{{q}}」</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{loading}}" id="msg-loading" style="display: flex; justify-content: flex-start; margin-bottom: 20rpx;">
+      <view style="background: #f0f7f4; padding: 16rpx 24rpx; border-radius: 20rpx 20rpx 20rpx 4rpx;">
+        <text style="font-size: 28rpx; color: #84938e;">AI 思考中...</text>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 快捷问题 -->
+  <view wx:if="{{messages.length === 0}}" style="padding: 0 16rpx; margin-bottom: 20rpx;">
+    <text style="font-size: 26rpx; color: #84938e; margin-bottom: 12rpx; display: block;">快捷问题</text>
+    <view style="display: flex; flex-wrap: wrap; gap: 12rpx;">
+      <view wx:for="{{quickQuestions}}" wx:key="index" style="background: #f0f7f4; border: 1rpx solid rgba(14,165,107,0.16); border-radius: 999rpx; padding: 12rpx 24rpx; font-size: 26rpx; color: #0ea56b;" bindtap="askQuickQuestion" data-question="{{item}}">{{item}}</view>
+    </view>
+  </view>
+
+  <!-- 输入区域 -->
+  <view style="position: fixed; bottom: 0; left: 0; right: 0; background: #fff; padding: 16rpx 24rpx; padding-bottom: calc(16rpx + env(safe-area-inset-bottom)); display: flex; gap: 12rpx; border-top: 1rpx solid #f0f0f0;">
+    <input class="form-input" placeholder="输入规则问题..." value="{{inputText}}" bindinput="onInput" bindconfirm="sendMessage" style="flex: 1; height: 72rpx;" />
+    <button class="btn-confirm" bindtap="sendMessage" disabled="{{!inputText.trim() || loading}}" style="height: 72rpx; line-height: 72rpx; padding: 0 32rpx;">发送</button>
+  </view>
+</view>

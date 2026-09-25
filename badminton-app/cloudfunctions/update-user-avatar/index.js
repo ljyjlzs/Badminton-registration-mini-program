@@ -1,57 +1,32 @@
+/**
+ * update-user-avatar 云函数 - 更新当前用户头像
+ */
 const cloud = require('wx-server-sdk');
 
-cloud.init({
-  env: cloud.DYNAMIC_CURRENT_ENV
-});
+const logger = require('./logger');
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const db = cloud.database();
 
 exports.main = async (event, context) => {
+  const { action = 'update', payload = {} } = event;
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
-  
-  const { avatar } = event;
-  
-  if (!avatar) {
-    return {
-      success: false,
-      error: '头像不能为空'
-    };
-  }
-  
+  if (!openid) return { success: false, message: '未获取到用户身份，请重新进入小程序' };
   try {
-    const userResult = await db.collection('users').where({
-      _openid: openid
-    }).get();
-    
-    if (userResult.data && userResult.data.length > 0) {
-      await db.collection('users').doc(userResult.data[0]._id).update({
-        data: {
-          avatar: avatar,
-          updated_at: db.serverDate()
-        }
+    if (action === 'update') {
+      const { avatar } = payload;
+      if (!avatar) return { success: false, message: '头像不能为空' };
+      const res = await db.collection('users').where({ openid: openid }).limit(1).get();
+      if (!res.data || res.data.length === 0) return { success: false, message: '用户不存在，请先完善资料' };
+      await db.collection('users').doc(res.data[0]._id).update({
+        data: { avatar: avatar, updatedAt: db.serverDate() }
       });
-    } else {
-      await db.collection('users').add({
-        data: {
-          _openid: openid,
-          avatar: avatar,
-          nickname: '',
-          level: 5,
-          created_at: db.serverDate(),
-          updated_at: db.serverDate()
-        }
-      });
+      return { success: true, data: { avatar: avatar }, message: '更新成功' };
     }
-    
-    return {
-      success: true,
-      data: { avatar }
-    };
+    return { success: false, message: '未知 action: ' + action };
   } catch (err) {
-    return {
-      success: false,
-      error: err.message || '更新头像失败'
-    };
+    logger.error('update-user-avatar', (typeof action !== 'undefined' ? action : '-'), { err: err });
+    return { success: false, message: err.message || '更新失败' };
   }
 };

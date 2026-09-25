@@ -1,0 +1,49 @@
+<view class="photo-detail-page">
+  <view wx:if="{{loading}}" style="min-height:100vh;display:flex;align-items:center;justify-content:center">
+    <text style="color:#8d9a95">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <view class="photo-main" wx:if="{{photo}}">
+      <image src="{{photo.fileID}}" mode="widthFix" lazy-load binderror="onImgError" />
+    </view>
+
+    <view class="photo-actions" wx:if="{{photo}}">
+      <view class="action-btn {{photo.likedByMe ? 'liked' : ''}}" bindtap="toggleLike">
+        ♥ {{photo.likeCount || 0}}
+      </view>
+      <view wx:if="{{isOrganizer || photo.uploadedBy === openid}}" class="action-btn" bindtap="deletePhoto" style="color: #c62828;">
+        删除
+      </view>
+    </view>
+
+    <view class="detail-section">
+      <text class="section-title">评论 ({{comments.length}})</text>
+      <block wx:if="{{comments.length > 0}}">
+        <view class="comment-item" wx:for="{{comments}}" wx:key="_id">
+          <view class="comment-header">
+            <text class="comment-user">{{item.nickname || '匿名'}}</text>
+            <text class="comment-time">{{item.createdAt}}</text>
+            <text wx:if="{{isOrganizer || item.userId === openid}}" class="comment-delete" bindtap="deleteComment" data-id="{{item._id}}" style="color: #c62828; font-size: 22rpx; margin-left: auto;">删除</text>
+          </view>
+          <view class="comment-content">{{item.content}}</view>
+          <block wx:if="{{item.replies && item.replies.length > 0}}">
+            <view class="comment-item" wx:for="{{item.replies}}" wx:for-item="reply" wx:key="_id" style="padding-left:32rpx;border-left:4rpx solid rgba(14,165,107,0.2)">
+              <view class="comment-header">
+                <text class="comment-user">{{reply.nickname || '匿名'}}</text>
+                <text class="comment-time">{{reply.createdAt}}</text>
+              </view>
+              <view class="comment-content">{{reply.content}}</view>
+            </view>
+          </block>
+        </view>
+      </block>
+      <view wx:else class="empty-tip">暂无评论</view>
+    </view>
+
+    <view class="comment-input-bar">
+      <input class="comment-input" placeholder="写评论..." value="{{commentText}}" bindinput="onCommentInput" />
+      <button class="comment-send" bindtap="sendComment" disabled="{{sending}}">发送</button>
+    </view>
+  </block>
+</view>

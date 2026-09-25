@@ -1,3 +1,7 @@
 {
-  "usingComponents": {}
+  "navigationBarTitleText": "活动详情",
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "match-reminder": "/components/match-reminder/match-reminder"
+  }
 }

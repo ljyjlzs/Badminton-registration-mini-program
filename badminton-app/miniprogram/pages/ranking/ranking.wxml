@@ -39,7 +39,7 @@
         <view
           wx:for="{{individualRankings}}"
           wx:key="userId"
-          class="ranking-item {{getRankClass(item.rank)}}">
+          class="ranking-item {{item.rankClass}}">
           <view class="rank-badge">
             <text wx:if="{{item.rank === 1}}" class="rank-icon">🥇</text>
             <text wx:elif="{{item.rank === 2}}" class="rank-icon">🥈</text>
@@ -48,9 +48,11 @@
           </view>
 
           <image
-            wx:if="{{item.avatar && item.avatar.trim().length > 0}}"
+            wx:if="{{item.avatar && item.avatar.length > 0}}"
             class="ranking-avatar"
             src="{{item.avatar}}"
+            lazy-load
+            binderror="onImgError"
             mode="aspectFill"></image>
           <view wx:else class="avatar-text">{{item.nickname && item.nickname.length > 0 ? item.nickname[0] : '?'}}</view>
 
@@ -60,13 +62,13 @@
           </view>
 
           <view class="score-info">
-            <view class="total-score {{getScoreClass(item.totalScore)}}">
+            <view class="total-score {{item.scoreClass}}">
               {{item.totalScore > 0 ? '+' : ''}}{{item.totalScore}} 分
             </view>
             <view class="score-detail">
-              <text>小组赛 {{item.groupScore > 0 ? '+' : ''}}{{item.groupScore}}</text>
-              <text wx:if="{{item.challengeScore !== 0}}">挑战赛 {{item.challengeScore > 0 ? '+' : ''}}{{item.challengeScore}}</text>
-              <text wx:if="{{item.finalScore !== 0}}">决赛 {{item.finalScore > 0 ? '+' : ''}}{{item.finalScore}}</text>
+              <text>场均 {{item.avgScore}}</text>
+              <text>{{item.matchCount}} 场</text>
+              <text>积分 {{item.rating}}</text>
             </view>
           </view>
         </view>
@@ -84,7 +86,7 @@
         <view
           wx:for="{{teamRankings}}"
           wx:key="teamId"
-          class="ranking-item team-item {{getRankClass(item.rank)}}">
+          class="ranking-item team-item {{item.rankClass}}">
           <view class="rank-badge">
             <text wx:if="{{item.rank === 1}}" class="rank-icon">🥇</text>
             <text wx:elif="{{item.rank === 2}}" class="rank-icon">🥈</text>
@@ -97,18 +99,20 @@
             <view class="team-members-row">
               <view wx:for="{{item.members}}" wx:key="userId" wx:for-item="member" class="team-member">
                 <image
-                  wx:if="{{member.avatar && member.avatar.trim().length > 0}}"
+                  wx:if="{{member.avatar && member.avatar.length > 0}}"
                   class="member-avatar-img"
                   src="{{member.avatar}}"
+                  lazy-load
+                  binderror="onImgError"
                   mode="aspectFill"></image>
-                <view wx:else class="member-avatar-text">{{member && member.nickname && member.nickname.trim().length > 0 ? member.nickname.trim()[0] : '?'}}</view>
+                <view wx:else class="member-avatar-text">{{member && member.nickname && member.nickname.length > 0 ? member.nickname[0] : '?'}}</view>
                 <text class="member-name">{{member && member.nickname ? member.nickname : '未知'}}</text>
               </view>
             </view>
           </view>
 
           <view class="team-score">
-            <text class="score-num {{getScoreClass(item.totalScore)}}">
+            <text class="score-num {{item.scoreClass}}">
               {{item.totalScore > 0 ? '+' : ''}}{{item.totalScore}}
             </text>
             <text class="score-unit">分</text>

@@ -1,0 +1,46 @@
+<view class="page-shell fill-page">
+  <view wx:if="{{loading}}" class="loading">
+    <view class="loading-spinner"></view>
+    <text>加载中...</text>
+  </view>
+
+  <view wx:else class="fill-shell">
+    <view class="summary-card">
+      <view class="summary-head">
+        <text class="summary-title">{{activityName}}</text>
+        <text class="summary-tag">补位推荐</text>
+      </view>
+      <view class="summary-numbers">
+        <view class="num-item">
+          <view class="num-value">
+            <text>{{activeCount}}</text>
+            <text class="num-unit">/ {{maxPlayers}}</text>
+          </view>
+          <text class="num-label">当前有效人数</text>
+        </view>
+        <view class="num-item">
+          <view class="num-value">{{waitlistCount}}</view>
+          <text class="num-label">候补人数</text>
+        </view>
+      </view>
+      <view class="gap-rows">
+        <view class="gap-row">{{pairGapText}}</view>
+        <view class="gap-row">{{startGapText}}</view>
+      </view>
+    </view>
+
+    <view wx:if="{{recommendations.length > 0}}" class="section-card">
+      <view class="section-head">
+        <text class="section-title">建议</text>
+      </view>
+      <view wx:for="{{recommendations}}" wx:key="index" class="rec-item">
+        <text class="rec-text">{{item.text}}</text>
+        <button class="copy-btn" data-text="{{item.text}}" bindtap="copyRecommendation">复制</button>
+      </view>
+    </view>
+    <view wx:else class="empty-tip">
+      <text class="empty-icon">💡</text>
+      <text class="empty-text">暂无可复制的建议</text>
+    </view>
+  </view>
+</view>

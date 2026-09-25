@@ -1,0 +1,86 @@
+<view class="court-page">
+  <view wx:if="{{loading}}" class="loading">加载中...</view>
+
+  <block wx:else>
+    <view wx:if="{{isOrganizer && !courts.length}}" class="config-panel">
+      <view class="panel-title">配置场地</view>
+      <view class="panel-desc">设置每场人数（≥4），系统将默认创建 1 个场地。</view>
+      <view class="form-item">
+        <text class="form-label">每场人数</text>
+        <input class="form-input" type="number" value="{{configPlayersPerCourt}}" bindinput="onConfigPlayersPerCourtInput"/>
+      </view>
+      <button class="btn-primary" bindtap="saveConfig">保存场地配置</button>
+    </view>
+
+    <block wx:else>
+      <view wx:if="{{isOrganizer}}" class="organizer-bar">
+        <button class="btn-mini" bindtap="addCourt">添加场地</button>
+        <button class="btn-mini" bindtap="openChangeM">修改人数</button>
+        <button class="btn-mini" bindtap="autoAssign">自动分配</button>
+        <button class="btn-mini" bindtap="checkReady">就绪检查</button>
+        <button class="btn-mini btn-start" bindtap="startGrouping">开始分组</button>
+      </view>
+
+      <view class="court-list">
+        <view wx:for="{{courts}}" wx:key="courtId" class="court-card">
+          <view class="court-head">
+            <text class="court-label">{{item.label}}</text>
+            <text class="court-count">{{item.members.length}} 人</text>
+            <text wx:if="{{isOrganizer}}" class="court-del" data-courtno="{{item.courtNo}}" bindtap="deleteCourt">删除</text>
+          </view>
+          <view class="member-list">
+            <view wx:for="{{item.members}}" wx:for-item="m" wx:key="userId" class="member-item">
+              <text class="member-name">{{m.nickname}}</text>
+              <text class="member-level">Lv.{{m.level}}</text>
+              <view wx:if="{{isOrganizer}}" class="member-move"
+                data-userid="{{m.userId}}" data-courtid="{{item.courtId}}" data-nickname="{{m.nickname}}"
+                bindtap="openMove">移动</view>
+            </view>
+            <view wx:if="{{item.members.length === 0}}" class="empty-tip">暂无分配</view>
+          </view>
+        </view>
+      </view>
+
+      <view wx:if="{{isOrganizer && unassigned.length > 0}}" class="unassigned-block">
+        <view class="block-title">未分配（{{unassigned.length}}人）</view>
+        <view wx:for="{{unassigned}}" wx:key="userId" class="unassigned-item">
+          <text class="member-name">{{item.nickname || '用户' + item.userId}}</text>
+          <text class="member-level">Lv.{{item.level}}</text>
+          <text class="member-move" data-userid="{{item.userId}}" data-nickname="{{item.nickname}}" bindtap="openAssign">分配</text>
+        </view>
+      </view>
+
+      <view wx:if="{{!isOrganizer}}" class="participant-tip">你是参与者，可下拉刷新查看最新场地分配。</view>
+    </block>
+  </block>
+
+  <view wx:if="{{showMoveModal}}" class="picker-mask" bindtap="closeMove">
+    <view class="picker-content" catchtap="stopPropagation">
+      <view class="picker-title">{{moveUser.courtId ? '移动' : '分配'}} {{moveUser.nickname || '用户' + moveUser.userId}} 到</view>
+      <view class="court-pick-list">
+        <view wx:for="{{courts}}" wx:key="courtId"
+          class="court-pick-item {{moveTargetCourtId === item.courtId ? 'selected' : ''}} {{moveUser.courtId === item.courtId ? 'disabled' : ''}}"
+          data-courtid="{{item.courtId}}" bindtap="selectMoveTarget">
+          {{item.label}}（{{item.members.length}} 人）
+        </view>
+      </view>
+      <view class="picker-actions">
+        <button class="btn-cancel" bindtap="closeMove">取消</button>
+        <button class="btn-confirm" bindtap="confirmMove">确认移动</button>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{showMMask}}" class="picker-mask" bindtap="closeChangeM">
+    <view class="picker-content" catchtap="stopPropagation">
+      <view class="picker-title">修改每场人数（≥4）</view>
+      <view class="form-item">
+        <input class="form-input" type="number" value="{{editM}}" bindinput="onEditMInput"/>
+      </view>
+      <view class="picker-actions">
+        <button class="btn-cancel" bindtap="closeChangeM">取消</button>
+        <button class="btn-confirm" bindtap="confirmChangeM">确认</button>
+      </view>
+    </view>
+  </view>
+</view>

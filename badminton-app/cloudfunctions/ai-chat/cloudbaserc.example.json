@@ -1,0 +1,19 @@
+{
+  "envId": "<你的云环境ID>",
+  "version": "2.0",
+  "functionRoot": ".",
+  "functions": [
+    {
+      "name": "ai-chat",
+      "handler": "index.main",
+      "runtime": "Nodejs20.19",
+      "timeout": 60,
+      "installDependency": true,
+      "envVariables": {
+        "AI_BASE_URL": "<AI 服务地址>",
+        "AI_API_KEY": "<从密钥管理处获取，勿提交>",
+        "AI_MODEL": "<模型名>"
+      }
+    }
+  ]
+}

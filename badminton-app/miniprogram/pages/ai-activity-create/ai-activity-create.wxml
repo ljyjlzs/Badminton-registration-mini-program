@@ -1,0 +1,45 @@
+<view class="ai-create-page">
+  <view class="detail-section">
+    <text class="section-title">描述你的活动</text>
+    <textarea class="ai-input" placeholder="例如：周六晚上宝安超越球馆8人双打" value="{{aiMessage}}" bindinput="onAiInput" />
+    <button class="btn-parse" bindtap="parseAi" disabled="{{parsing}}">{{parsing ? 'AI 解析中...' : 'AI 智能解析'}}</button>
+  </view>
+
+  <view class="detail-section" wx:if="{{draft}}">
+    <text class="section-title">活动信息</text>
+
+    <view class="form-group">
+      <text class="form-label">活动名称</text>
+      <input class="form-input {{isNameMissing ? 'missing' : ''}}" value="{{form.name}}" bindinput="onFormInput" data-field="name" placeholder="活动名称" />
+      <view class="missing-tip" wx:if="{{isNameMissing}}">请补充活动名称</view>
+    </view>
+
+    <view class="form-group">
+      <text class="form-label">活动时间</text>
+      <input class="form-input {{isTimeMissing ? 'missing' : ''}}" value="{{form.time}}" bindinput="onFormInput" data-field="time" placeholder="yyyy-MM-dd HH:mm:ss" />
+      <view class="missing-tip" wx:if="{{isTimeMissing}}">请补充活动时间</view>
+    </view>
+
+    <view class="form-group">
+      <text class="form-label">活动地点</text>
+      <input class="form-input {{isLocationMissing ? 'missing' : ''}}" value="{{form.location}}" bindinput="onFormInput" data-field="location" placeholder="活动地点" />
+      <view class="missing-tip" wx:if="{{isLocationMissing}}">请补充活动地点</view>
+    </view>
+
+    <view class="form-group">
+      <text class="form-label">活动类型</text>
+      <view class="type-selector">
+        <view class="type-item {{form.type === 'singles' ? 'selected' : ''}}" data-type="singles" bindtap="selectType">单打</view>
+        <view class="type-item {{form.type === 'doubles' ? 'selected' : ''}}" data-type="doubles" bindtap="selectType">双打轮换</view>
+        <view class="type-item {{form.type === 'fixed-doubles' ? 'selected' : ''}}" data-type="fixed-doubles" bindtap="selectType">双打固搭</view>
+      </view>
+    </view>
+
+    <view class="form-group">
+      <text class="form-label">报名人数上限</text>
+      <input class="form-input" type="number" value="{{form.maxPlayers}}" bindinput="onFormInput" data-field="maxPlayers" placeholder="8" />
+    </view>
+
+    <button class="btn-create" bindtap="createActivity" disabled="{{creating}}">{{creating ? '创建中...' : '确认创建活动'}}</button>
+  </view>
+</view>

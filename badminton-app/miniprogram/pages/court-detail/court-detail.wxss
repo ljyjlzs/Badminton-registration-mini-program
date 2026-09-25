@@ -1,0 +1,27 @@
+.container { padding: 24rpx; }
+.header { display: flex; flex-direction: column; margin-bottom: 16rpx; }
+.title { font-size: 36rpx; font-weight: 600; }
+.activity-name { font-size: 26rpx; color: #73867f; margin-top: 4rpx; }
+.tabs { display: flex; border-bottom: 1rpx solid #e6edea; margin-bottom: 16rpx; }
+.tab { flex: 1; text-align: center; padding: 16rpx 0; color: #73867f; }
+.tab.active { color: #0ea56b; font-weight: 600; border-bottom: 4rpx solid #0ea56b; }
+.action-bar { margin-bottom: 16rpx; }
+.btn-primary { background: #0ea56b; color: #fff; border-radius: 12rpx; }
+.tip { text-align: center; color: #73867f; padding: 40rpx 0; }
+.court-block { margin-bottom: 24rpx; background: #fff; border-radius: 16rpx; padding: 16rpx; }
+.court-title { font-weight: 600; color: #1f2d28; margin-bottom: 8rpx; }
+.match-card { border-top: 1rpx solid #f0f4f2; padding: 16rpx 0; }
+.match-teams { display: flex; align-items: center; justify-content: space-between; }
+.team-name { flex: 1; text-align: center; font-size: 28rpx; }
+.vs { color: #b6c3bd; margin: 0 12rpx; }
+.score-inputs { display: flex; align-items: center; justify-content: center; margin: 12rpx 0; }
+.score-input { width: 96rpx; text-align: center; border: 1rpx solid #d7e2dd; border-radius: 8rpx; padding: 8rpx 0; }
+.colon { margin: 0 16rpx; color: #b6c3bd; }
+.btn-submit { background: #0ea56b; color: #fff; }
+.final-score { text-align: center; color: #0ea56b; font-weight: 600; margin-top: 8rpx; }
+.rank-section { background: #fff; border-radius: 16rpx; padding: 16rpx; margin-bottom: 16rpx; }
+.rank-title { font-weight: 600; margin-bottom: 8rpx; }
+.rank-item { display: flex; align-items: center; padding: 12rpx 0; border-top: 1rpx solid #f0f4f2; }
+.rank-no { width: 48rpx; color: #0ea56b; font-weight: 600; }
+.rank-name { flex: 1; }
+.rank-score { color: #73867f; font-size: 24rpx; }

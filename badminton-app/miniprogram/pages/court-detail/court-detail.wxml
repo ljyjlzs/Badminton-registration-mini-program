@@ -1,0 +1,72 @@
+<view class="container">
+  <view class="header">
+    <text class="title">场地双打</text>
+    <text class="activity-name">{{activity.name}}</text>
+  </view>
+
+  <view class="tabs">
+    <view class="tab {{tab==='matches' ? 'active' : ''}}" data-tab="matches" bindtap="switchTab">赛程 / 计分</view>
+    <view class="tab {{tab==='ranking' ? 'active' : ''}}" data-tab="ranking" bindtap="switchTab">排名</view>
+  </view>
+
+  <view wx:if="{{tab==='matches'}}">
+    <view wx:if="{{isOrganizer}}" class="action-bar">
+      <button class="btn-primary" bindtap="generate" loading="{{generating}}">生成 / 重排赛程</button>
+    </view>
+
+    <view wx:if="{{loading}}" class="tip">加载中...</view>
+    <view wx:elif="{{courts.length === 0}}" class="tip">暂无赛程，组织者请先生成</view>
+
+    <view wx:for="{{courts}}" wx:key="court" class="court-block">
+      <view class="court-title">{{item.court}}</view>
+      <view wx:for="{{item.matches}}" wx:for-item="m" wx:key="_id" class="match-card">
+        <view class="match-teams">
+          <text class="team-name">{{m.team1.name || '队伍1'}}</text>
+          <text class="vs">VS</text>
+          <text class="team-name">{{m.team2.name || '队伍2'}}</text>
+        </view>
+        <block wx:if="{{m.status === 'finished'}}">
+          <view class="final-score">{{m.team1Score}} : {{m.team2Score}}（已结束）</view>
+          <block wx:if="{{isOrganizer}}">
+            <view class="score-inputs">
+              <input class="score-input" type="number" placeholder="0" value="{{scoreInputs[m._id + '_t1']}}" data-matchid="{{m._id}}" data-side="t1" bindinput="onScoreInput"/>
+              <text class="colon">:</text>
+              <input class="score-input" type="number" placeholder="0" value="{{scoreInputs[m._id + '_t2']}}" data-matchid="{{m._id}}" data-side="t2" bindinput="onScoreInput"/>
+            </view>
+            <button class="btn-submit" size="mini" data-matchid="{{m._id}}" data-action="modify" bindtap="submitScore">修改比分</button>
+          </block>
+        </block>
+        <block wx:else>
+          <view class="score-inputs">
+            <input class="score-input" type="number" placeholder="0" value="{{scoreInputs[m._id + '_t1']}}" data-matchid="{{m._id}}" data-side="t1" bindinput="onScoreInput"/>
+            <text class="colon">:</text>
+            <input class="score-input" type="number" placeholder="0" value="{{scoreInputs[m._id + '_t2']}}" data-matchid="{{m._id}}" data-side="t2" bindinput="onScoreInput"/>
+          </view>
+          <button class="btn-submit" size="mini" data-matchid="{{m._id}}" data-action="submit" bindtap="submitScore">提交比分</button>
+        </block>
+      </view>
+    </view>
+  </view>
+
+  <view wx:else class="ranking-block">
+    <block wx:if="{{!rankings}}"><view class="tip">加载中...</view></block>
+    <block wx:else>
+      <view class="rank-section">
+        <view class="rank-title">个人排名（场均积分）</view>
+        <view wx:for="{{rankings.individualRankings}}" wx:key="userId" class="rank-item">
+          <text class="rank-no">{{item.rank}}</text>
+          <text class="rank-name">{{item.nickname}}</text>
+          <text class="rank-score">均{{item.avgScore}} / 总{{item.totalScore}}</text>
+        </view>
+      </view>
+      <view class="rank-section">
+        <view class="rank-title">队伍排名</view>
+        <view wx:for="{{rankings.teamRankings}}" wx:key="teamId" class="rank-item">
+          <text class="rank-no">{{item.rank}}</text>
+          <text class="rank-name">{{item.name}}</text>
+          <text class="rank-score">总{{item.totalScore}}</text>
+        </view>
+      </view>
+    </block>
+  </view>
+</view>

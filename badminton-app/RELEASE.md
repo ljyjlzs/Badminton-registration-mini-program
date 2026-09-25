@@ -114,6 +114,55 @@
 - [ ] 排名功能正常
 - [ ] 分享功能正常
 
+## 云函数发布
+
+1. 改动全部提交
+2. 打 annotated tag（message 里列出本次涉及的云函数）：
+   ```bash
+   git tag -a v1.2.0 -m "云函数: join-activity, get-activities"
+   git push origin v1.2.0
+   ```
+3. 在 badminton-app/docs/发布记录.md 追加一行
+4. 在微信开发者工具按 tag 清单逐个「上传并部署」
+
+## 云函数回滚
+
+```bash
+bash badminton-app/scripts/rollback-fn.sh v1.1.0
+```
+脚本输出从上一个 tag 到目标 tag 之间变更的云函数目录列表，按列表 git checkout 后在微信开发者工具重新上传这几个函数。
+
+## 云函数发布与回滚
+
+### 发布前打 tag
+
+```bash
+git tag -a vYYYYMMDD-n -m "描述"
+```
+
+首次启用说明：存量仓库无历史 tag，从当下开始打即可。
+
+### 发布
+
+微信开发者工具对**改动的**云函数右键「上传并部署：云端安装依赖」。
+
+部署前先同步共享模块：
+
+```bash
+node cloudfunctions/sync-shared.js
+```
+
+### 回滚
+
+1. `git diff <tag> -- cloudfunctions/<fn>/` 得出差异函数清单
+2. checkout 旧版本：`git checkout <tag> -- cloudfunctions/<fn>/`
+3. 只重传差异的 1-3 个函数（**不要全量 60+ 个**）
+
+### 与小程序端回滚的关系
+
+- 小程序端按下方「回滚操作」章节执行
+- 云函数按本节执行，两者可独立回滚
+
 ## 回滚操作
 
 如需回滚：

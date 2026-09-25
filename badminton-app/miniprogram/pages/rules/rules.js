@@ -1,4 +1,14 @@
 // pages/rules/rules.js
+const { request } = require('../../utils/request.js');
+
+const ICON_MAP = { singles: '🏸', doubles: '👥', 'fixed-doubles': '🔗' };
+
+function toLines(text) {
+  if (Array.isArray(text)) return text;
+  if (!text) return [];
+  return String(text).split(/[；;\n]/).map(s => s.trim()).filter(Boolean);
+}
+
 Page({
   data: {
     loading: true,
@@ -18,25 +28,26 @@ Page({
 
   loadRules: function () {
     this.setData({ loading: true });
-    wx.cloud.callFunction({
-      name: 'get-rules',
-      success: res => {
-        this.setData({ loading: false });
-        if (res.result && res.result.success) {
-          const sections = res.result.data || [];
-          const currentSection = sections.find(s => s.id === this.data.currentTab) || sections[0] || null;
-          this.setData({
-            sections: sections,
-            currentSection: currentSection
-          });
-        } else {
-          wx.showToast({ title: '加载失败', icon: 'none' });
-        }
-      },
-      fail: () => {
-        this.setData({ loading: false });
-        wx.showToast({ title: '网络错误', icon: 'none' });
+    request('get-rules', 'get', {}).then(res => {
+      this.setData({ loading: false });
+      if (res.result && res.result.success) {
+        const raw = (res.result.data && res.result.data.sections) || [];
+        const sections = raw.map(s => ({
+          id: s.type,
+          name: s.title,
+          icon: ICON_MAP[s.type] || '📋',
+          match_rules: toLines(s.match_rules),
+          scoring_rules: toLines(s.scoring_rules),
+          common_rules: toLines(s.common_rules)
+        }));
+        const currentSection = sections.find(s => s.id === this.data.currentTab) || sections[0] || null;
+        this.setData({ sections: sections, currentSection: currentSection });
+      } else {
+        wx.showToast({ title: '加载失败', icon: 'none' });
       }
+    }).catch(() => {
+      this.setData({ loading: false });
+      wx.showToast({ title: '网络错误', icon: 'none' });
     });
   },
 
@@ -47,5 +58,22 @@ Page({
       currentTab: tab,
       currentSection: currentSection
     });
+  },
+
+  goToRulesQa: function() {
+    wx.navigateTo({ url: '/pages/rules-qa/rules-qa' });
+  },
+
+  onShareAppMessage: function() {
+    return {
+      title: '羽毛球比赛规则',
+      path: '/pages/rules/rules'
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: '羽毛球比赛规则'
+    };
   }
 });

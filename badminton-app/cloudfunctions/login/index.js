@@ -11,6 +11,7 @@
  */
 
 const cloud = require('wx-server-sdk');
+const logger = require('./logger');
 
 cloud.init({
   env: cloud.DYNAMIC_CURRENT_ENV
@@ -26,22 +27,26 @@ exports.main = async (event, context) => {
   if (!openid) {
     return {
       success: false,
-      error: '获取 openid 失败'
+      message: '获取 openid 失败'
     };
   }
   
   try {
     console.log('开始登录, openid:', openid);
     
-    const userInfo = event.userInfo || {};
+    const userInfo = (event.payload && event.payload.userInfo) || event.userInfo || {};
     
     try {
       const userResult = await db.collection('users').where({
-        _openid: openid
+        openid: openid
       }).get();
-      
+
       if (userResult.data && userResult.data.length > 0) {
         console.log('用户已存在');
+        // 兼容旧数据：确保 openid 字段存在
+        if (!userResult.data[0].openid) {
+          await db.collection('users').doc(userResult.data[0]._id).update({ data: { openid: openid } });
+        }
         return {
           success: true,
           data: {
@@ -50,20 +55,21 @@ exports.main = async (event, context) => {
             nickname: userResult.data[0].nickname,
             avatar: userResult.data[0].avatar,
             level: userResult.data[0].level
-          }
+          },
+          message: 'ok'
         };
       }
     } catch (e) {
       console.log('查询用户失败或集合不存在, 创建新用户');
     }
-    
+
     const newUser = {
-      _openid: openid,
-      nickname: userInfo.nickname || '',
-      avatar: userInfo.avatar || '',
+      openid: openid,
+      nickname: userInfo.nickname || userInfo.nickName || '',
+      avatar: userInfo.avatar || userInfo.avatarUrl || '',
       level: 5,
-      created_at: db.serverDate(),
-      updated_at: db.serverDate()
+      createdAt: db.serverDate(),
+      updatedAt: db.serverDate()
     };
     
     const addResult = await db.collection('users').add({
@@ -79,13 +85,15 @@ exports.main = async (event, context) => {
         nickname: newUser.nickname,
         avatar: newUser.avatar,
         level: newUser.level
-      }
+      },
+      message: 'ok'
     };
   } catch (err) {
+    logger.error('login', 'login', { err: err });
     console.error('登录失败：', err);
     return {
       success: false,
-      error: err.message || '登录失败'
+      message: err.message || '登录失败'
     };
   }
 };

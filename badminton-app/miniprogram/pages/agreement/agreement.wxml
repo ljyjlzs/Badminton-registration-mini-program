@@ -1,0 +1,42 @@
+<view class="policy-page">
+  <view class="policy-header">
+    <text class="policy-header-title">用户服务协议</text>
+    <text class="policy-header-date">更新日期：2026年8月4日</text>
+  </view>
+  <view class="policy-body">
+    <view class="policy-section">
+      <text class="policy-section-title">一、服务说明</text>
+      <text class="policy-text">羽毛球竞赛管理小程序是一个为羽毛球爱好者提供的活动组织工具，主要功能包括：创建和管理羽毛球活动、在线报名、自动分组、比赛记分和排名展示。</text>
+    </view>
+    <view class="policy-section">
+      <text class="policy-section-title">二、用户义务</text>
+      <text class="policy-text">1. 用户应提供真实、准确的个人信息。因信息不实导致的任何后果由用户自行承担。</text>
+      <text class="policy-text">2. 用户应遵守体育道德，不得在活动中进行作弊、扰乱秩序等行为。</text>
+      <text class="policy-text">3. 用户不得利用本小程序从事任何违法违规活动。</text>
+      <text class="policy-text">4. 用户应妥善保管自己的微信账号，因账号保管不善造成的损失由用户自行承担。</text>
+    </view>
+    <view class="policy-section">
+      <text class="policy-section-title">三、服务变更与中断</text>
+      <text class="policy-text">1. 因服务器维护、系统升级等原因，本小程序可能出现短时服务中断，我们会尽量提前通知。</text>
+      <text class="policy-text">2. 我们保留对服务内容进行更新和调整的权利，重大变更会提前通知用户。</text>
+    </view>
+    <view class="policy-section">
+      <text class="policy-section-title">四、免责声明</text>
+      <text class="policy-text">1. 本小程序仅提供活动组织工具，活动中的人身安全和财物安全由参与者自行负责。</text>
+      <text class="policy-text">2. AI 助手提供的回答仅供参考，不构成专业建议。请以实际羽毛球比赛规则为准。</text>
+      <text class="policy-text">3. 因不可抗力（如自然灾害、战争等）导致的服务中断，我们不承担责任。</text>
+    </view>
+    <view class="policy-section">
+      <text class="policy-section-title">五、知识产权</text>
+      <text class="policy-text">本小程序的全部内容（包括但不限于代码、界面设计、文档）的知识产权归开发者所有。未经授权，禁止复制、修改、发布或用于商业用途。</text>
+    </view>
+    <view class="policy-section">
+      <text class="policy-section-title">六、协议修改</text>
+      <text class="policy-text">我们可能会不时修改本协议。修改后的协议会在小程序内公布，继续使用即视为同意修改后的协议。</text>
+    </view>
+    <view class="policy-section">
+      <text class="policy-section-title">七、联系方式</text>
+      <text class="policy-text">如有任何问题，请联系：ljyjlzs@163.com</text>
+    </view>
+  </view>
+</view>

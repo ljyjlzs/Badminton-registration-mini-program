@@ -1,191 +1,136 @@
 /**
- * getActivities 云函数 - 获取活动列表
+ * get-activities 云函数 - 活动列表（对齐 ActivityServiceImpl.getActivities）
+ * 动作：list
+ * payload: { type: 'organized'|'joined'|'available'|'search'|'unavailable', keyword?, page?, pageSize? }
+ * 返回 data: { list, total, page, hasMore }（BUG-6/UX-25 分页改造）
  */
-
 const cloud = require('wx-server-sdk');
-
-cloud.init({
-  env: cloud.DYNAMIC_CURRENT_ENV
-});
-
+const logger = require('./logger');
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
+const _ = db.command;
 
-exports.main = async (event, context) => {
+// ENG-04：查询期投影，避免拉回整文档（project() 仍做 camelCase 映射兜底）
+const ACT_FIELDS = {
+  name: 1, time: 1, location: 1, province: 1, city: 1, district: 1,
+  type: 1, status: 1, maxPlayers: 1, minPlayers: 1, currentPlayers: 1,
+  organizerId: 1, courtCount: 1, playersPerCourt: 1
+};
+
+function project(a) {
+  return {
+    id: a._id,
+    name: a.name,
+    time: a.time,
+    location: a.location,
+    province: a.province,
+    city: a.city,
+    district: a.district,
+    type: a.type,
+    status: a.status,
+    maxPlayers: a.maxPlayers,
+    minPlayers: a.minPlayers,
+    currentPlayers: a.currentPlayers,
+    organizerId: a.organizerId,
+    courtCount: a.courtCount,
+    playersPerCourt: a.playersPerCourt
+  };
+}
+
+exports.main = async (event) => {
+  const { action = 'list', payload = {} } = event;
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
-  const { type, keyword } = event; // 'organized' | 'joined' | 'available' | 'search'
-  
   try {
+    if (action !== 'list') return { success: false, message: '未知 action: ' + action };
+    const { type = 'available', keyword } = payload;
+    // BUG-6: pageSize 默认 20，上限 100
+    const page = Math.max(Number(payload.page) || 1, 1);
+    const pageSize = Math.min(Math.max(Number(payload.pageSize) || 20, 1), 100);
+    const skip = (page - 1) * pageSize;
+
     let activities = [];
-    
-    if (type === 'search') {
-      // 搜索可参加的活动（报名中状态，按关键词匹配名称或地点）
-      try {
-        let query = {
-          status: 'registering'
-        };
-        
-        const result = await db.collection('activities')
-          .where(query)
-          .orderBy('time', 'asc')
-          .limit(100)
-          .get();
-        
-        activities = result.data || [];
-        
-        // 关键词过滤（云数据库不支持模糊查询，在前端过滤）
-        if (keyword && keyword.trim()) {
-          const kw = keyword.trim().toLowerCase();
-          // 类型中文映射
-          const typeMap = {
-            'singles': '单打',
-            'doubles': '双打轮换',
-            'fixed-doubles': '双打固搭'
-          };
-          activities = activities.filter(a => {
-            const nameMatch = a.name && a.name.toLowerCase().includes(kw);
-            const locationMatch = a.location && a.location.toLowerCase().includes(kw);
-            const typeCn = typeMap[a.type] || '';
-            const typeMatch = typeCn.includes(kw) || (a.type && a.type.toLowerCase().includes(kw));
-            return nameMatch || locationMatch || typeMatch;
-          });
-        }
-      } catch (e) {
-        console.log('查询search失败:', e.message);
-        activities = [];
-      }
-    } else if (type === 'organized') {
-      try {
-        const result = await db.collection('activities')
-          .where({
-            organizer_id: openid
-          })
-          .orderBy('created_at', 'desc')
-          .limit(100)
-          .get();
-        
-        activities = result.data || [];
-      } catch (e) {
-        console.log('查询organized失败:', e.message);
-        activities = [];
-      }
+    let total = 0;
+
+    if (type === 'organized') {
+      const where = { organizerId: openid };
+      // PERF-04: count 与列表查询互不依赖，并行
+      const [cnt, r] = await Promise.all([
+        db.collection('activities').where(where).count(),
+        db.collection('activities').where(where).field(ACT_FIELDS).orderBy('time', 'desc').skip(skip).limit(pageSize).get()
+      ]);
+      total = cnt.total;
+      activities = r.data || [];
     } else if (type === 'joined') {
-      try {
-        const regResult = await db.collection('registrations')
-          .where({
-            user_id: openid,
-            cancel_status: db.command.neq('approved')
-          })
-          .limit(100)
-          .get();
-        
-        const activityIds = (regResult.data || []).map(r => r.activity_id);
-        
-        if (activityIds.length > 0) {
-          const actResult = await db.collection('activities')
-            .where({
-              _id: db.command.in(activityIds)
-            })
-            .orderBy('created_at', 'desc')
-            .limit(100)
-            .get();
-          
-          activities = actResult.data || [];
-        }
-      } catch (e) {
-        console.log('查询joined失败:', e.message);
-        activities = [];
+      // regs 决定 where，保留串行
+      const regs = await db.collection('registrations').where({ userId: openid, applyStatus: 'active', cancelStatus: _.neq('approved') }).limit(1000).get();
+      const ids = (regs.data || []).map(r => r.activityId);
+      if (ids.length > 0) {
+        const where = { _id: _.in(ids) };
+        // PERF-04: count 与列表查询互不依赖，并行
+        const [cnt, r] = await Promise.all([
+          db.collection('activities').where(where).count(),
+          db.collection('activities').where(where).field(ACT_FIELDS).orderBy('time', 'desc').skip(skip).limit(pageSize).get()
+        ]);
+        total = cnt.total;
+        activities = r.data || [];
       }
     } else if (type === 'available') {
-      try {
-        const result = await db.collection('activities')
-          .where({
-            status: 'registering'
-          })
-          .orderBy('time', 'asc')
-          .limit(100)
-          .get();
-        
-        activities = result.data || [];
-      } catch (e) {
-        console.log('查询available失败:', e.message);
-        activities = [];
-      }
+      // BUG-6: 过滤下推到数据库
+      // regs 决定 joinedIds，保留串行
+      const regs = await db.collection('registrations').where({ userId: openid, applyStatus: 'active' }).limit(1000).get();
+      const joinedIds = (regs.data || []).map(x => x.activityId);
+      const where = {
+        status: 'registering',
+        organizerId: _.neq(openid),
+        ...(joinedIds.length > 0 ? { _id: _.nin(joinedIds) } : {})
+      };
+      // PERF-04: count 与列表查询互不依赖，并行
+      const [cnt, r] = await Promise.all([
+        db.collection('activities').where(where).count(),
+        db.collection('activities').where(where).field(ACT_FIELDS).orderBy('time', 'asc').skip(skip).limit(pageSize).get()
+      ]);
+      total = cnt.total;
+      activities = r.data || [];
+    } else if (type === 'search') {
+      if (!keyword) return { success: true, data: { list: [], total: 0, page, hasMore: false }, message: 'ok' };
+      const kw = keyword.trim();
+      // BUG-6: 关键字搜索下推到数据库正则
+      const searchCond = _.or([
+        { name: db.RegExp({ regexp: kw, options: 'i' }) },
+        { location: db.RegExp({ regexp: kw, options: 'i' }) }
+      ]);
+      const fullWhere = _.and([{ status: 'registering' }, searchCond]);
+      // PERF-04: count 与列表查询互不依赖，并行
+      const [cnt, r] = await Promise.all([
+        db.collection('activities').where(fullWhere).count(),
+        db.collection('activities').where(fullWhere).field(ACT_FIELDS).orderBy('time', 'asc').skip(skip).limit(pageSize).get()
+      ]);
+      total = cnt.total;
+      activities = r.data || [];
     } else if (type === 'unavailable') {
-      try {
-        const result = await db.collection('activities')
-          .where({
-            status: db.command.in(['grouping', 'playing', 'challenge', 'final', 'finished'])
-          })
-          .orderBy('time', 'desc')
-          .limit(100)
-          .get();
-        
-        activities = result.data || [];
-      } catch (e) {
-        console.log('查询unavailable失败:', e.message);
-        activities = [];
-      }
+      const where = { status: _.in(['grouping', 'playing', 'finished']) };
+      // PERF-04: count 与列表查询互不依赖，并行
+      const [cnt, r] = await Promise.all([
+        db.collection('activities').where(where).count(),
+        db.collection('activities').where(where).field(ACT_FIELDS).orderBy('time', 'desc').skip(skip).limit(pageSize).get()
+      ]);
+      total = cnt.total;
+      activities = r.data || [];
+    } else {
+      return { success: false, message: '无效的 type: ' + type };
     }
-    
-    // 根据比赛状态自动计算活动状态
-    for (let activity of activities) {
-      if (activity.status !== 'registering') {
-        try {
-          const matchesResult = await db.collection('matches')
-            .where({
-              activity_id: activity._id
-            })
-            .get();
-          
-          const matches = matchesResult.data || [];
-          
-          if (matches.length > 0) {
-            const hasPlaying = matches.some(m => m.status === 'playing' || m.status === 'confirming');
-            const allGroupConfirmed = matches.filter(m => m.round === 'group').every(m => m.status === 'confirmed');
-            const allChallengeConfirmed = matches.filter(m => m.round === 'challenge').every(m => m.status === 'confirmed');
-            const allFinalConfirmed = matches.filter(m => m.round === 'final').every(m => m.status === 'confirmed');
-            const hasChallenge = matches.some(m => m.round === 'challenge');
-            const hasFinal = matches.some(m => m.round === 'final');
-            
-            if (hasPlaying) {
-              activity.status = 'playing';
-            } else if (activity.status === 'challenge' && hasChallenge && allChallengeConfirmed && !hasFinal) {
-              // 挑战赛全部结束但还没有决赛时，保持challenge状态
-            } else if (activity.status === 'final' && allFinalConfirmed) {
-              activity.status = 'finished';
-            } else if (!hasChallenge && !hasFinal && allGroupConfirmed) {
-              // 小组赛全部结束且没有挑战赛时，保持playing状态，等待组织者点击"开始挑战赛"
-              activity.status = 'playing';
-            } else if (hasChallenge && !hasFinal && allChallengeConfirmed) {
-              // 挑战赛结束但没有决赛时，保持challenge状态
-              activity.status = 'challenge';
-            } else if (hasFinal && allFinalConfirmed) {
-              // 决赛结束
-              activity.status = 'finished';
-            } else if (hasChallenge) {
-              // 有挑战赛
-              activity.status = 'challenge';
-            } else if (hasFinal && !allFinalConfirmed) {
-              // 有决赛且决赛未完成时，保持final状态
-              activity.status = 'final';
-            }
-          }
-        } catch (e) {
-          console.log('计算活动状态失败:', e.message);
-        }
-      }
+
+    // 关键字过滤（非 search 类型的附加过滤，仍走内存——数据量已在 pageSize 内）
+    if (keyword && type !== 'search') {
+      const kw = keyword.trim();
+      activities = activities.filter(a => (a.name && a.name.includes(kw)) || (a.location && a.location.includes(kw)));
     }
-    
-    return {
-      success: true,
-      data: activities
-    };
+
+    const hasMore = skip + activities.length < total;
+    return { success: true, data: { list: activities.map(project), total, page, hasMore }, message: 'ok' };
   } catch (err) {
-    console.error('获取活动列表失败：', err);
-    return {
-      success: false,
-      error: err.message || '获取活动列表失败'
-    };
+    logger.error('get-activities', action, { err: err });
+    return { success: false, message: err.message || '获取活动列表失败' };
   }
 };

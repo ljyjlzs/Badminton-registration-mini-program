@@ -1,0 +1,74 @@
+<view class="page-shell">
+  <!-- 比赛提醒横幅 -->
+  <view wx:if="{{hasReminder}}" class="reminder-banner" bindtap="goToReminderMatch" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); padding: 20rpx 24rpx; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16rpx; border-radius: 12rpx;">
+    <view style="display: flex; align-items: center; gap: 12rpx;">
+      <text style="font-size: 36rpx;">⏰</text>
+      <text style="color: #fff; font-size: 28rpx; font-weight: bold;">{{reminderMessage}}</text>
+    </view>
+    <text catchtap="closeReminder" style="color: #fff; font-size: 32rpx; padding: 8rpx;">✕</text>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading">
+    <view class="loading-spinner"></view>
+    <text>加载赛程...</text>
+  </view>
+
+  <view wx:elif="{{isEmpty}}" class="empty-state">
+    <text class="empty-icon">📋</text>
+    <text class="empty-text">暂无赛程</text>
+    <text class="empty-desc">组织者生成赛程后将在此显示</text>
+  </view>
+
+  <view wx:else>
+    <view class="match-order-tip" wx:if="{{isOrganizer && activityType === 'court-doubles'}}">
+      <text class="match-order-tip-text">💡 组织者可拖拽调整场地和比赛顺序</text>
+    </view>
+
+    <view class="match-list" wx:if="{{!isOrganizer || activityType !== 'court-doubles'}}">
+      <view wx:for="{{matches}}" wx:key="_id" class="match-card" bindtap="goToDetail" data-id="{{item._id}}">
+        <view class="match-header">
+          <view class="match-court">{{item.court || '场地'}}</view>
+          <view class="match-round">第 {{item.roundOrder}} 场</view>
+          <view class="match-status status-{{item.status}}">{{item.statusText}}</view>
+        </view>
+        <view class="match-teams">
+          <view class="team-block">
+            <text class="team-names">{{item.team1Names}}</text>
+            <text class="team-score">{{item.team1Score != null ? item.team1Score : '-'}}</text>
+          </view>
+          <view class="vs-divider">VS</view>
+          <view class="team-block">
+            <text class="team-score">{{item.team2Score != null ? item.team2Score : '-'}}</text>
+            <text class="team-names">{{item.team2Names}}</text>
+          </view>
+        </view>
+        <view class="match-footer" wx:if="{{item.status === 'pending'}}">
+          <button class="btn-score" catchtap="goToScore" data-id="{{item._id}}">录入比分</button>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{isOrganizer && activityType === 'court-doubles'}}" class="drag-match-list">
+      <view
+        wx:for="{{matches}}"
+        wx:key="_id"
+        class="drag-match-item {{draggingIndex === index ? 'dragging' : ''}}"
+        catchtouchstart="onDragStart"
+        catchtouchmove="onDragMove"
+        catchtouchend="onDragEnd"
+        data-index="{{index}}"
+        data-id="{{item._id}}">
+        <view class="drag-handle">⠿</view>
+        <view class="drag-match-info">
+          <text class="drag-match-court">{{item.court}}</text>
+          <text class="drag-match-teams">{{item.team1Names}} vs {{item.team2Names}}</text>
+          <text class="drag-match-status status-{{item.status}}">{{item.statusText}}</text>
+        </view>
+        <view class="drag-match-order">{{item.roundOrder}}</view>
+      </view>
+    </view>
+
+    <!-- 保存顺序按钮 -->
+    <button wx:if="{{isOrganizer && !locked && matches.length > 0}}" class="btn-primary" style="margin-top: 24rpx;" bindtap="saveOrder">保存顺序</button>
+  </view>
+</view>

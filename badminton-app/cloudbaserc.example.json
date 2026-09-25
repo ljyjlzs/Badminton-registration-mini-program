@@ -1,0 +1,27 @@
+{
+  "_comment": "cloudbaserc 占位模板。真实 cloudbaserc.json 含 envId/密钥等敏感配置，禁止入库（见根 .gitignore 的 **/cloudbaserc.json 规则）。复制本文件为 cloudbaserc.json 后填入真实值。",
+  "envId": "<你的云环境ID>",
+  "version": "2.0",
+  "functionRoot": "cloudfunctions",
+  "functions": [
+    {
+      "name": "login",
+      "handler": "index.main",
+      "runtime": "Nodejs20.19",
+      "timeout": 30,
+      "installDependency": true
+    },
+    {
+      "name": "ai-chat",
+      "handler": "index.main",
+      "runtime": "Nodejs20.19",
+      "timeout": 60,
+      "installDependency": true,
+      "envVariables": {
+        "AI_BASE_URL": "<AI服务地址>",
+        "AI_API_KEY": "<REDACTED>",
+        "AI_MODEL": "<模型名>"
+      }
+    }
+  ]
+}

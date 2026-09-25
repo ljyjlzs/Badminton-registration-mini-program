@@ -1,3 +1,5 @@
 {
-  "usingComponents": {}
+  "usingComponents": {
+    "ai-suggestion": "/components/ai-suggestion/ai-suggestion"
+  }
 }

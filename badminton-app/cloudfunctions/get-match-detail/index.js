@@ -1,126 +1,78 @@
 /**
- * getMatchDetail 云函数 - 获取比赛详情
+ * get-match-detail 云函数 - 单场比分详情（对齐新 schema：team1Id/team2Id + teams 集合）
+ * 动作：detail
+ * payload: { matchId }
  */
-
 const cloud = require('wx-server-sdk');
 
-cloud.init({
-  env: cloud.DYNAMIC_CURRENT_ENV
-});
+const logger = require('./logger');
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const db = cloud.database();
+const _ = db.command;
 
-exports.main = async (event, context) => {
+exports.main = async (event) => {
+  const { action = 'detail', payload = {} } = event;
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
-  
-  const { activityId, matchId } = event;
-  
-  if (!activityId || !matchId) {
-    return {
-      success: false,
-      error: '参数不完整'
-    };
-  }
-  
   try {
-    // 获取比赛
-    const matchResult = await db.collection('matches').doc(matchId).get();
-    
-    if (!matchResult.data) {
-      return {
-        success: false,
-        error: '比赛不存在'
-      };
-    }
-    
-    const match = matchResult.data;
-    
-    // 获取队伍信息
-    const team1Result = await db.collection('teams').doc(match.team1_id).get();
-    const team2Result = await db.collection('teams').doc(match.team2_id).get();
-    
-    const team1 = team1Result.data || {};
-    const team2 = team2Result.data || {};
-    
-    // 获取报名信息
-    const registrationsResult = await db.collection('registrations')
-      .where({
-        activity_id: activityId
-      })
-      .get();
-    
-    const registrations = registrationsResult.data || [];
-    const regNicknames = {};
-    const regLevels = {};
-    registrations.forEach(reg => {
-      regNicknames[reg.user_id] = reg.nickname;
-      regLevels[reg.user_id] = reg.level;
-    });
-    
-    // 获取用户信息
-    const userIds = [...(team1.members || []), ...(team2.members || [])];
-    let usersMap = {};
-    
-    if (userIds.length > 0) {
-      const usersResult = await db.collection('users')
-        .where({
-          _openid: db.command.in(userIds)
-        })
-        .get();
-      
-      usersResult.data.forEach(user => {
-        usersMap[user._openid] = user;
-      });
-    }
-    
-    // 组合队伍信息
-    const team1Members = (team1.members || []).map(userId => ({
-      userId,
-      nickname: regNicknames[userId] || usersMap[userId]?.nickname || '未知用户',
-      avatar: usersMap[userId]?.avatar || '',
-      level: regLevels[userId] || usersMap[userId]?.level || 5
-    }));
-    
-    const team2Members = (team2.members || []).map(userId => ({
-      userId,
-      nickname: regNicknames[userId] || usersMap[userId]?.nickname || '未知用户',
-      avatar: usersMap[userId]?.avatar || '',
-      level: regLevels[userId] || usersMap[userId]?.level || 5
-    }));
-    
-    // 获取活动信息判断组织者
-    const activityResult = await db.collection('activities').doc(activityId).get();
-    const isOrganizer = activityResult.data?.organizer_id === openid;
-    
-    // 检查用户队伍
-    let userTeam = null;
-    if (team1.members?.includes(openid)) {
-      userTeam = match.team1_id;
-    } else if (team2.members?.includes(openid)) {
-      userTeam = match.team2_id;
-    }
-    
-    // 判断是否为记分员（对局双方队员 + 组织者都可以记分）
-    const isPlayer = team1.members?.includes(openid) || team2.members?.includes(openid);
-    const isScorer = isOrganizer || isPlayer;
-    
+    if (action !== 'detail') return { success: false, message: '未知 action: ' + action };
+    const { matchId } = payload;
+    if (!matchId) return { success: false, message: 'matchId 不能为空' };
+
+    const matchRes = await db.collection('matches').doc(matchId).get();
+    if (!matchRes.data) return { success: false, message: '比赛不存在' };
+    const match = matchRes.data;
+    const activityId = match.activityId;
+
+    // PERF-04: activities/teams 互不依赖（都只用 match 上的字段），并行查询
+    const round1 = await Promise.all([
+      db.collection('activities').doc(activityId).get(),
+      db.collection('teams').doc(match.team1Id).get(),
+      db.collection('teams').doc(match.team2Id).get()
+    ]);
+    const actRes = round1[0];
+    const isOrganizer = actRes.data && actRes.data.organizerId === openid;
+    const t1 = round1[1].data || { members: [] };
+    const t2 = round1[2].data || { members: [] };
+
+    // users 依赖 t1/t2 的 members，保留串行
+    const memberIds = [...(t1.members || []), ...(t2.members || [])];
+    const usersRes = await db.collection('users').where({ openid: _.in(memberIds) }).get();
+    const umap = {};
+    (usersRes.data || []).forEach(u => { umap[u.openid] = u; });
+    const toMember = (uid) => {
+      const u = umap[uid] || {};
+      return { userId: uid, nickname: u.nickname || '球友', avatar: u.avatar || '', level: u.level || 5 };
+    };
+    const team1 = { id: t1._id, name: t1.name, members: (t1.members || []).map(toMember) };
+    const team2 = { id: t2._id, name: t2.name, members: (t2.members || []).map(toMember) };
+
+    const matchMembers = memberIds;
+    const isScorer = isOrganizer || matchMembers.includes(openid);
+    const userTeam = (t1.members || []).includes(openid) ? '1' : ((t2.members || []).includes(openid) ? '2' : null);
+
     return {
       success: true,
       data: {
-        match,
-        team1: { ...team1, members: team1Members },
-        team2: { ...team2, members: team2Members },
-        isOrganizer,
-        isScorer,
-        userTeam
-      }
+        match: {
+          id: match._id,
+          team1Id: match.team1Id,
+          team2Id: match.team2Id,
+          team1Score: match.team1Score,
+          team2Score: match.team2Score,
+          status: match.status,
+          court: match.court,
+          roundOrder: match.roundOrder,
+          round: match.round
+        },
+        team1, team2,
+        isOrganizer, isScorer, userTeam
+      },
+      message: 'ok'
     };
   } catch (err) {
-    console.error('获取比赛详情失败：', err);
-    return {
-      success: false,
-      error: err.message || '获取比赛详情失败'
-    };
+    logger.error('get-match-detail', (typeof action !== 'undefined' ? action : '-'), { err: err });
+    return { success: false, message: err.message || '获取比赛详情失败' };
   }
 };

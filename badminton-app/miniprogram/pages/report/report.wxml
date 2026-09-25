@@ -1,0 +1,66 @@
+<view class="report-page">
+  <view wx:if="{{loading}}" class="report-loading">
+    <text style="color:#8d9a95">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <view class="overview-card" wx:if="{{activity}}">
+      <view class="overview-kicker">活动战报</view>
+      <view class="activity-name">{{activity.name}}</view>
+      <view class="overview-grid">
+        <view class="overview-item">
+          <text class="overview-label">时间</text>
+          <text class="overview-value">{{activity.time}}</text>
+        </view>
+        <view class="overview-item">
+          <text class="overview-label">地点</text>
+          <text class="overview-value">{{activity.location}}</text>
+        </view>
+        <view class="overview-item">
+          <text class="overview-label">人数</text>
+          <text class="overview-value">{{activity.currentPlayers}}/{{activity.maxPlayers}}</text>
+        </view>
+        <view class="overview-item">
+          <text class="overview-label">比赛场次</text>
+          <text class="overview-value">{{matches.length}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="detail-section" wx:if="{{matches.length > 0}}">
+      <text class="section-title">比赛记录</text>
+      <view class="top3-item" wx:for="{{matches}}" wx:key="_id">
+        <view class="top3-info">
+          <view class="top3-name">{{item.team1_name}} vs {{item.team2_name}}</view>
+          <view class="top3-meta">{{item.court || ''}} · 第{{item.roundOrder || item.round || ''}}轮</view>
+        </view>
+        <view class="top3-rank rank-1" style="background:{{item.team1Score > item.team2Score ? 'linear-gradient(135deg,#0ea56b,#0bc278)' : '#8d9a95'}}">
+          {{item.team1Score}}:{{item.team2Score}}
+        </view>
+      </view>
+    </view>
+
+    <view class="detail-section">
+      <text class="section-title">AI 文案</text>
+      <block wx:if="{{copy}}">
+        <view class="copy-block">
+          <view class="copy-label">群公告</view>
+          <view class="copy-text">{{copy.announcement}}</view>
+          <button class="btn-copy" data-text="{{copy.announcement}}" bindtap="copyText">复制</button>
+        </view>
+        <view class="copy-block">
+          <view class="copy-label">分享语</view>
+          <view class="copy-text">{{copy.share}}</view>
+          <button class="btn-copy" data-text="{{copy.share}}" bindtap="copyText">复制</button>
+        </view>
+        <view class="copy-block">
+          <view class="copy-label">邀请语</view>
+          <view class="copy-text">{{copy.invite}}</view>
+          <button class="btn-copy" data-text="{{copy.invite}}" bindtap="copyText">复制</button>
+        </view>
+      </block>
+      <view wx:else class="empty-tip">暂无文案，点击下方按钮生成</view>
+      <button class="btn-generate" bindtap="generateCopy" disabled="{{generating}}">{{generating ? '生成中...' : '生成 AI 文案'}}</button>
+    </view>
+  </block>
+</view>

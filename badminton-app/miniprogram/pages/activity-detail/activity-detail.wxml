@@ -1,3 +1,4 @@
+<wxs src="../../utils/pct.wxs" module="pct" />
 <view class="detail-page">
   <view wx:if="{{loading}}" class="loading detail-loading">
     <view class="loading-spinner"></view>
@@ -5,20 +6,40 @@
   </view>
 
   <view wx:if="{{!loading && activity}}" class="detail-shell">
+    <view wx:if="{{globalBannerVisible}}" class="global-banner">
+      <view wx:if="{{globalCurrentText}}" class="global-banner-row live" bindtap="onGlobalBannerTap">
+        <view class="banner-dot"></view>
+        <text class="banner-text">{{globalCurrentText}}</text>
+      </view>
+      <view wx:if="{{globalNextText}}" class="global-banner-row">
+        <view class="banner-dot"></view>
+        <text class="banner-text">{{globalNextText}}</text>
+      </view>
+    </view>
+
+    <view style="display:flex;justify-content:space-between;align-items:center;background:#fff;margin:16rpx 0;padding:24rpx;border-radius:12rpx;" bindtap="goToPhotoAlbum">
+      <text style="font-size:30rpx;color:#1f2d29;">📷 活动相册（{{album.photoCount || 0}} 张）</text>
+      <text style="color:#999;font-size:32rpx;">›</text>
+    </view>
+
+    <match-reminder id="activityReminder" activity-id="{{activityId}}" mode="detail"/>
+
     <view class="overview-card">
       <view class="overview-head">
         <view class="overview-copy">
           <view class="overview-kicker">MATCH OVERVIEW</view>
           <view class="activity-name">{{activity.name}}</view>
         </view>
-        <view class="status-badge status-{{activity.status}}">
-          <text wx:if="{{activity.status === 'registering'}}">报名中</text>
-          <text wx:elif="{{activity.status === 'grouping'}}">分组中</text>
-          <text wx:elif="{{activity.status === 'playing'}}">比赛中</text>
-          <text wx:elif="{{activity.status === 'challenge'}}">挑战赛</text>
-          <text wx:elif="{{activity.status === 'final'}}">决赛</text>
-          <text wx:elif="{{activity.status === 'finished'}}">已结束</text>
-          <text wx:else>{{activity.status}}</text>
+        <view class="overview-head-right">
+          <view class="status-badge status-{{activity.status}}">
+            <text wx:if="{{activity.status === 'registering'}}">报名中</text>
+            <text wx:elif="{{activity.status === 'grouping'}}">分组中</text>
+            <text wx:elif="{{activity.status === 'playing'}}">比赛中</text>
+
+            <text wx:elif="{{activity.status === 'finished'}}">已结束</text>
+            <text wx:else>{{activity.status}}</text>
+          </view>
+          <button class="btn-share" open-type="share">分享</button>
         </view>
       </view>
 
@@ -27,70 +48,40 @@
           <text class="overview-label">地点</text>
           <text class="overview-value">{{activity.location}}</text>
         </view>
-        <view class="overview-item">
+        <view class="overview-item time-cell" bindtap="addCalendar">
           <text class="overview-label">时间</text>
           <text class="overview-value">{{activity.formattedTime || '待定'}}</text>
+          <text class="calendar-hint">点击加入日历</text>
         </view>
         <view class="overview-item">
           <text class="overview-label">赛制</text>
-          <text class="overview-value">{{activity.type === 'singles' ? '单打' : activity.type === 'fixed-doubles' ? '双打固搭' : '双打轮转'}}</text>
+          <text class="overview-value">{{activity.typeLabel}}</text>
         </view>
         <view class="overview-item">
           <text class="overview-label">人数</text>
-          <text class="overview-value">{{activity.current_players || 0}} / {{activity.max_players}}</text>
+          <text class="overview-value">{{activity.currentPlayers || 0}} / {{activity.maxPlayers}}</text>
         </view>
       </view>
 
       <view class="progress-block">
         <view class="progress-summary">
           <text class="progress-title">报名进度</text>
-          <text class="progress-value">{{activity.current_players || 0}} / {{activity.max_players}}</text>
+          <text class="progress-value">{{activity.currentPlayers || 0}} / {{activity.maxPlayers}}</text>
         </view>
         <progress
-          percent="{{(activity.current_players / activity.max_players) * 100}}"
+          percent="{{pct.pct(activity.currentPlayers, activity.maxPlayers)}}"
           stroke-width="8"
           active
           activeColor="#0ea56b"
           backgroundColor="#dfe8e4"/>
       </view>
 
+      <view wx:if="{{isOrganizer && activity.status === 'registering' && activity.type !== 'court-doubles'}}" class="capacity-entry" bindtap="showCapacityModal">
+        <text>调整人数上限</text>
+      </view>
+
       <view wx:if="{{isOrganizer}}" class="organizer-tip">
         你是这场活动的组织者，可以直接管理报名和比赛流程。
-      </view>
-    </view>
-
-    <view wx:if="{{activity.status === 'registering'}}" class="section detail-section">
-      <view class="section-header">
-        <view>
-          <text class="section-title">报名列表</text>
-          <text class="section-caption">当前已报名选手和搭档状态</text>
-        </view>
-        <text class="section-count">{{registrations.length}} 人</text>
-      </view>
-
-      <view class="registration-list">
-        <view wx:for="{{registrations}}" wx:key="_id" class="registration-item-wrap">
-          <view class="registration-item" bindtap="onRegItemTap" data-item="{{item}}">
-            <view class="avatar-text">{{item.nickname && item.nickname.length > 0 ? item.nickname[0] : '?'}}</view>
-            <view class="reg-info">
-              <text class="nickname">{{item.nickname || '未知'}}</text>
-              <text wx:if="{{activity.type === 'fixed-doubles' && item.partner_id}}" class="partner-tag">搭档：{{item.partner_nickname || '已配对'}}</text>
-            </view>
-            <view class="level-badge level-{{item.level || 5}}">Lv.{{item.level || 5}}</view>
-
-            <view wx:if="{{item.cancel_status === 'pending'}}" class="cancel-request-tag">取消中</view>
-          </view>
-        </view>
-
-        <view wx:if="{{registrations.length === 0}}" class="empty-tip compact-empty">
-          <text class="empty-icon">👥</text>
-          <text class="empty-text">暂时还没有报名</text>
-          <text class="empty-desc">活动开放后，报名玩家会展示在这里。</text>
-        </view>
-      </view>
-
-      <view wx:if="{{isOrganizer && pendingCancelCount > 0}}" class="pending-cancel-tip">
-        当前有 {{pendingCancelCount}} 个取消报名申请，记得及时处理。
       </view>
     </view>
 
@@ -104,32 +95,53 @@
 
       <view class="action-section">
         <button
-          wx:if="{{!userRegistration && activity.current_players < activity.max_players}}"
+          wx:if="{{!userRegistration && activity.currentPlayers < activity.maxPlayers}}"
           class="btn-primary"
           bindtap="joinActivity">
           报名参加
         </button>
 
-        <block wx:if="{{userRegistration && !userRegistration.cancel_status}}">
-          <view wx:if="{{activity.status === 'registering'}}" class="joined-tip" bindtap="showLevelPicker">
+        <!-- 帮人报名入口 -->
+        <view wx:if="{{activity.status === 'registering'}}" style="margin-top: 16rpx;">
+          <button class="btn-secondary" bindtap="openAgentModal">帮人报名</button>
+        </view>
+
+        <block wx:if="{{userRegistration && (userRegistration.applyStatus === 'active' || userRegistration.applyStatus === 'waiting') && !userRegistration.cancelStatus}}">
+          <view wx:if="{{userRegistration.applyStatus === 'waiting'}}" class="joined-tip">
+            你已进入候补 (Lv.{{userRegistration.level}})
+          </view>
+          <view wx:elif="{{activity.status === 'registering'}}" class="joined-tip" bindtap="showLevelPicker">
             你已报名 (Lv.{{userRegistration.level}})，点击可修改等级
           </view>
           <view wx:elif="{{userRegistration}}" class="joined-tip">
             你已报名 (Lv.{{userRegistration.level}})
           </view>
           <button
-            wx:if="{{activity.status === 'registering'}}"
+            wx:if="{{activity.type === 'fixed-doubles' && userRegistration.partnerId}}"
+            class="btn-cancel-reg"
+            bindtap="unbindPartner">
+            解绑搭档
+          </button>
+          <!-- 取消候补按钮 -->
+          <button
+            wx:if="{{userRegistration.applyStatus === 'waiting'}}"
+            class="btn-cancel-reg"
+            bindtap="cancelWaitlist">
+            取消候补
+          </button>
+          <button
+            wx:elif="{{activity.status === 'registering'}}"
             class="btn-cancel-reg"
             bindtap="cancelRegistration">
             取消报名
           </button>
         </block>
 
-        <block wx:if="{{userRegistration && userRegistration.cancel_status === 'pending'}}">
+        <block wx:if="{{userRegistration && userRegistration.cancelStatus === 'pending'}}">
           <view class="cancel-pending-tip">已提交取消申请，等待组织者确认。</view>
         </block>
 
-        <block wx:if="{{userRegistration && userRegistration.cancel_status === 'rejected'}}">
+        <block wx:if="{{userRegistration && userRegistration.cancelStatus === 'rejected'}}">
           <view class="joined-tip" bindtap="showLevelPicker">
             你已报名 (Lv.{{userRegistration.level}})，点击可修改等级
           </view>
@@ -141,8 +153,105 @@
           </button>
         </block>
 
-        <view wx:if="{{!userRegistration && activity.current_players >= activity.max_players}}" class="full-tip">
+        <view wx:if="{{!userRegistration && activity.currentPlayers >= activity.maxPlayers}}" class="full-tip">
           当前报名人数已满
+        </view>
+
+        <button
+          wx:if="{{!userRegistration && activity.currentPlayers >= activity.maxPlayers}}"
+          class="btn-primary btn-waitlist"
+          bindtap="joinActivity">
+          加入候补
+        </button>
+      </view>
+    </view>
+
+    <view wx:if="{{activity.status === 'registering'}}" class="section detail-section">
+      <view class="section-header">
+        <view>
+          <text class="section-title">报名列表</text>
+          <text class="section-caption">当前已报名选手和搭档状态</text>
+        </view>
+        <text class="section-count">{{registrations.length}} 人</text>
+      </view>
+
+      <view class="registration-list">
+        <view wx:for="{{registrations}}" wx:key="id" class="registration-item-wrap {{item.cancelStatus === 'pending' ? 'has-pending' : ''}}">
+          <view class="registration-item" bindtap="onRegItemTap" data-item="{{item}}">
+            <image
+              wx:if="{{item.avatar && item.avatar.length > 0}}"
+              class="avatar-text avatar-img"
+              src="{{item.avatar}}"
+              lazy-load
+              binderror="onImgError"
+              mode="aspectFill"></image>
+            <view wx:else class="avatar-text">{{item.nickname && item.nickname.length > 0 ? item.nickname[0] : '?'}}</view>
+            <view class="reg-info">
+              <text class="nickname">{{item.nickname || '未知'}}</text>
+              <text wx:if="{{item.agentUserId}}" class="partner-tag">{{item.agentNickname || '代报人'}}代报</text>
+              <text wx:if="{{activity.type === 'fixed-doubles' && item.partnerId}}" class="partner-tag">搭档：{{item.partnerNickname || '已配对'}}</text>
+              <text wx:elif="{{activity.type === 'fixed-doubles'}}" class="partner-tag">待配搭档</text>
+              <text
+                wx:if="{{activity.type === 'fixed-doubles' && item.partnerId && userRegistration && item.id === userRegistration.id}}"
+                class="cancel-request-tag"
+                style="background:#ffebee;color:#c62828;padding:4rpx 12rpx;border-radius:8rpx;font-size:22rpx;margin-top:0;margin-left:8rpx;"
+                bindtap="unbindPartner">解绑搭档</text>
+            </view>
+            <view class="level-badge level-{{item.level || 5}}">Lv.{{item.level || 5}}</view>
+            <view wx:if="{{item.cancelStatus === 'pending'}}" class="cancel-request-tag">取消中</view>
+          </view>
+        </view>
+
+        <view wx:if="{{registrations.length === 0}}" class="empty-tip compact-empty">
+          <text class="empty-icon">👥</text>
+          <text class="empty-text">暂时还没有报名</text>
+          <text class="empty-desc">活动开放后，报名玩家会展示在这里。</text>
+        </view>
+      </view>
+
+      <view wx:if="{{waitlist.length > 0}}" class="waitlist-section">
+        <view class="section-caption" style="margin-top:20rpx;">
+          <text>候补名单</text>
+          <text style="color:#999;font-size:24rpx;margin-left:8rpx;">( {{waitlist.length}} 人 )</text>
+        </view>
+        <view wx:for="{{waitlist}}" wx:key="id" class="registration-item-wrap">
+          <view class="registration-item">
+            <view class="avatar-text">{{item.nickname && item.nickname.length > 0 ? item.nickname[0] : '?'}}</view>
+            <view class="reg-info">
+              <text class="nickname">{{item.nickname || '未知'}}</text>
+              <text class="partner-tag" style="color:#999;">候补</text>
+            </view>
+            <view class="level-badge level-{{item.level || 5}}">Lv.{{item.level || 5}}</view>
+          </view>
+        </view>
+      </view>
+
+      <view wx:if="{{isOrganizer && pendingCancelCount > 0}}" class="pending-cancel-tip">
+        当前有 {{pendingCancelCount}} 个取消报名申请，记得及时处理。
+      </view>
+    </view>
+
+    <view wx:if="{{agentRegistrations.length > 0}}" class="section detail-section">
+      <view class="section-header">
+        <view>
+          <text class="section-title">代报名单</text>
+          <text class="section-caption">你帮别人报名的记录</text>
+        </view>
+      </view>
+      <view class="agent-reg-list">
+        <view wx:for="{{agentRegistrations}}" wx:key="id" class="agent-reg-item">
+          <view class="agent-reg-info">
+            <text class="nickname">{{item.nickname || '未知'}}</text>
+            <text wx:if="{{item.cancelStatus === 'pending'}}" class="cancel-request-tag">取消中</text>
+            <text wx:if="{{item.applyStatus === 'waiting'}}" class="waiting-tag">候补中</text>
+          </view>
+          <view style="display: flex; align-items: center; gap: 16rpx;">
+            <view class="level-badge level-{{item.level || 5}}">Lv.{{item.level || 5}}</view>
+            <view wx:if="{{activity.status === 'registering'}}" style="display: flex; gap: 16rpx;">
+              <view class="cancel-request-tag agent-op" style="background: #e8f5e9; color: #2e7d32; padding: 12rpx 24rpx; border-radius: 8rpx; font-size: 22rpx; min-height: 56rpx; box-sizing: border-box;" bindtap="showAgentLevelPicker" data-id="{{item.id}}">改等级</view>
+              <view class="cancel-request-tag agent-op" style="background: #ffebee; color: #c62828; padding: 12rpx 24rpx; border-radius: 8rpx; font-size: 22rpx; min-height: 56rpx; box-sizing: border-box;" bindtap="cancelAgentRegistration" data-id="{{item.id}}">取消</view>
+            </view>
+          </view>
         </view>
       </view>
     </view>
@@ -185,7 +294,7 @@
         </view>
       </view>
 
-      <view wx:if="{{isOrganizer && (activity.status === 'grouping' || activity.status === 'playing' || activity.status === 'challenge' || activity.status === 'finished')}}" class="organizer-action">
+      <view wx:if="{{isOrganizer && (activity.status === 'grouping' || activity.status === 'playing' || activity.status === 'finished')}}" class="organizer-action">
         <view class="organizer-btns">
           <button
             wx:if="{{activity.status !== 'finished'}}"
@@ -200,41 +309,90 @@
           </button>
         </view>
       </view>
+
+      <view wx:if="{{weather}}" class="weather-card" style="position: relative;">
+        <view class="weather-icon">{{weather.dayweather === '晴' ? '☀️' : weather.dayweather === '多云' ? '⛅' : weather.dayweather === '阴' ? '☁️' : weather.dayweather === '小雨' ? '🌦' : '🌧'}}</view>
+        <view class="weather-info">
+          <text class="weather-temp">{{weather.daytemp}}℃~{{weather.nighttemp}}℃</text>
+          <text class="weather-desc">{{weather.dayweather}}/{{weather.nightweather}} {{weather.daywind}}风 {{weather.daypower}}级</text>
+        </view>
+        <view style="position: absolute; top: 12rpx; right: 16rpx; font-size: 24rpx; color: #0ea56b;" bindtap="refreshWeather">刷新</view>
+      </view>
+
+      <view wx:if="{{isOrganizer}}" class="nav-buttons">
+        <view class="nav-btn" bindtap="goToPhotoAlbum">
+          <text class="nav-btn-icon">📷</text>
+          <text class="nav-btn-text">相册</text>
+        </view>
+        <view class="nav-btn" bindtap="goToReport">
+          <text class="nav-btn-icon">📊</text>
+          <text class="nav-btn-text">战报</text>
+        </view>
+        <view class="nav-btn" bindtap="goToActivityReport">
+          <text class="nav-btn-icon">📈</text>
+          <text class="nav-btn-text">活动战报</text>
+        </view>
+        <view class="nav-btn" bindtap="goToRecommendTime">
+          <text class="nav-btn-icon">⏰</text>
+          <text class="nav-btn-text">推荐时间</text>
+        </view>
+        <view class="nav-btn" bindtap="goToInvite">
+          <text class="nav-btn-icon">✉️</text>
+          <text class="nav-btn-text">邀请</text>
+        </view>
+        <view class="nav-btn" bindtap="goToInvitePage">
+          <text class="nav-btn-icon">👥</text>
+          <text class="nav-btn-text">邀约</text>
+        </view>
+        <view class="nav-btn" bindtap="openAiCopy">
+          <text class="nav-btn-icon">📝</text>
+          <text class="nav-btn-text">AI 文案</text>
+        </view>
+        <!-- BUG-17: settings 页（语音记分配置）入口，此前注册但零导航 -->
+        <navigator url="/pages/settings/settings?activityId={{activityId}}" class="nav-btn" hover-class="none">
+          <text class="nav-btn-icon">⚙️</text>
+          <text class="nav-btn-text">设置</text>
+        </navigator>
+      </view>
+
+      <view wx:if="{{isOrganizer}}" class="ai-section" style="margin-top:24rpx;">
+        <view class="section-caption" style="margin-bottom:16rpx;font-weight:600;color:#333;">AI 助手</view>
+        <view class="ai-grid">
+          <view class="ai-grid-item" bindtap="goToGroupingPreview">
+            <text class="ai-grid-icon">👀</text>
+            <text class="ai-grid-label">AI 预览分组</text>
+          </view>
+          <view class="ai-grid-item" bindtap="goToFillSuggestion">
+            <text class="ai-grid-icon">💡</text>
+            <text class="ai-grid-label">AI 凑人建议</text>
+          </view>
+          <view class="ai-grid-item" bindtap="goToAiNotePreview">
+            <text class="ai-grid-icon">📝</text>
+            <text class="ai-grid-label">AI 相册小记</text>
+          </view>
+          <view class="ai-grid-item" wx:if="{{activity.type === 'court-doubles' && activity.status === 'registering'}}" bindtap="goToCourtAssign">
+            <text class="ai-grid-icon">🏸</text>
+            <text class="ai-grid-label">AI 场地分配</text>
+          </view>
+        </view>
+      </view>
     </view>
 
-    <view wx:if="{{activity.status === 'grouping' || activity.status === 'playing' || activity.status === 'challenge' || activity.status === 'final' || activity.status === 'finished'}}" class="section detail-section">
+    <view wx:if="{{activity.status === 'grouping' || activity.status === 'playing' || activity.status === 'finished'}}" class="section detail-section">
       <view class="section-header">
         <view>
           <text class="section-title">比赛安排</text>
-          <text class="section-caption">查看分组赛、挑战赛和决赛的进度</text>
+          <text class="section-caption">查看分组赛和决赛的进度</text>
         </view>
-        <view class="section-tags">
-          <text wx:if="{{activity.status === 'challenge'}}" class="section-tag challenge-tag">挑战赛</text>
-          <text wx:if="{{activity.status === 'final'}}" class="section-tag final-tag">决赛</text>
-        </view>
+  
       </view>
 
-      <view wx:if="{{isOrganizer && activity.status === 'grouping'}}" class="organizer-action">
+      <view wx:if="{{isOrganizer && activity.status === 'grouping' && activity.type !== 'court-doubles'}}" class="organizer-action">
         <view class="btn-center">
           <button class="btn-start" bindtap="goToGrouping">管理分组并开始比赛</button>
         </view>
-      </view>
-
-      <view wx:if="{{isOrganizer && activity.status === 'playing' && allGroupFinished && !hasChallengeMatches}}" class="organizer-action">
-        <view class="btn-center">
-          <button class="btn-challenge" bindtap="startChallenge">开始挑战赛</button>
-        </view>
-      </view>
-
-      <view wx:if="{{isOrganizer && hasChallengeMatches && !allChallengeFinished}}" class="organizer-action">
-        <view class="btn-center">
-          <button class="btn-challenge" bindtap="startAllChallenge">开始所有挑战赛</button>
-        </view>
-      </view>
-
-      <view wx:if="{{isOrganizer && activity.status === 'final'}}" class="organizer-action">
-        <view class="btn-center">
-          <button class="btn-final" bindtap="startAllFinal">开始决赛</button>
+        <view wx:if="{{activity.type === 'court-doubles'}}" class="btn-center" style="margin-top:16rpx;">
+          <button class="btn-secondary" bindtap="goToSchedule">比赛顺序</button>
         </view>
       </view>
 
@@ -242,56 +400,112 @@
         <view
           wx:for="{{matches}}"
           wx:key="_id"
-          class="match-card venue-card {{item.round === 'challenge' ? 'challenge-match' : item.round === 'final' ? 'final-match' : ''}} {{item.status === 'playing' ? 'match-playing' : item.status === 'pending' ? 'match-pending' : item.status === 'confirming' ? 'match-confirming' : item.status === 'confirmed' ? 'match-confirmed' : ''}}"
-          bindtap="goToMatch"
-          data-id="{{item._id}}">
-          <view class="venue-title">
-            <text wx:if="{{item.round === 'group'}}">场地 {{item.venue}}</text>
-            <text wx:elif="{{item.round === 'challenge'}}">挑战赛 {{item.venue}}</text>
-            <text wx:elif="{{item.round === 'final'}}">决赛</text>
+          class="match-card {{item.isMyMatch ? 'my-match' : ''}} {{item.status === 'playing' ? 'match-playing' : item.status === 'pending' ? 'match-pending' : 'match-finished'}}"
+          bindtap="goToMatch" data-id="{{item._id}}">
+          <view class="match-card-top">
+            <view class="card-copy">
+              <text class="round-label">第 {{item.roundOrder || index + 1}} 场</text>
+              <text wx:if="{{item.isMyMatch}}" class="my-tag">我的</text>
+            </view>
+            <view class="status-badge {{item.status}}">
+              <text wx:if="{{item.status === 'pending'}}">待开始</text>
+              <text wx:elif="{{item.status === 'playing'}}">比赛中</text>
+              <text wx:elif="{{item.status === 'finished'}}">已结束</text>
+            </view>
           </view>
-
-          <view class="team-info">
-            <view class="team-name">{{item.team1_name || '队伍1'}}</view>
-            <view class="team-members">{{item.team1_members}}</view>
+          <view class="match-card-body">
+            <view class="team-block">
+              <view class="team-avatar team1-avatar"><text>{{item.team1AvatarText}}</text></view>
+              <view class="team-name-row" wx:if="{{item.team1DisplayName}}">
+                <text class="team-name">{{item.team1DisplayName}}</text>
+                <view wx:if="{{item.status === 'finished' && item.team1Score > item.team2Score}}" class="win-tag">胜</view>
+              </view>
+              <text class="team-members" wx:if="{{item.team1MemberNames}}">{{item.team1MemberNames}}</text>
+            </view>
+            <view class="vs-block"><view class="vs-circle"><text>VS</text></view></view>
+            <view class="team-block">
+              <view class="team-avatar team2-avatar"><text>{{item.team2AvatarText}}</text></view>
+              <view class="team-name-row" wx:if="{{item.team2DisplayName}}">
+                <text class="team-name">{{item.team2DisplayName}}</text>
+                <view wx:if="{{item.status === 'finished' && item.team2Score > item.team1Score}}" class="win-tag">胜</view>
+              </view>
+              <text class="team-members" wx:if="{{item.team2MemberNames}}">{{item.team2MemberNames}}</text>
+            </view>
           </view>
-
-          <view class="vs-divider">VS</view>
-
-          <view class="team-info">
-            <view class="team-name">{{item.team2_name || '队伍2'}}</view>
-            <view class="team-members">{{item.team2_members}}</view>
-          </view>
-
-          <view wx:if="{{item.status === 'confirmed'}}" class="match-score">
-            {{item.team1_score}} - {{item.team2_score}}
-          </view>
-
-          <view wx:if="{{item.status === 'pending'}}" class="match-status">
-            待开始
-          </view>
-
-          <view wx:if="{{item.status === 'playing'}}" class="match-status playing-status">
-            比赛中
-          </view>
-
-          <view wx:if="{{item.status === 'confirming'}}" class="match-status confirm-status">
-            待确认
+          <view class="match-card-actions">
+            <view wx:if="{{item.status === 'finished'}}" class="score-band">
+              <text class="score-num {{item.team1Score > item.team2Score ? 'winner' : ''}}">{{item.team1Score}}</text>
+              <text class="score-colon">:</text>
+              <text class="score-num {{item.team2Score > item.team1Score ? 'winner' : ''}}">{{item.team2Score}}</text>
+            </view>
+            <view wx:else class="status-line {{item.status}}">
+              <text>{{item.status === 'playing' ? '比赛中' : '待开始'}}</text>
+            </view>
           </view>
         </view>
       </view>
     </view>
 
-    <view wx:if="{{isOrganizer && hasChallengeMatches && allChallengeFinished && !hasFinalMatches}}" class="section detail-section">
-      <view class="organizer-action">
-        <view class="btn-center">
-          <button class="btn-final" bindtap="startFinal">创建决赛</button>
-        </view>
+    <!-- UX-04 固定底部报名操作条 -->
+    <view wx:if="{{activity.status === 'registering'}}" class="bottom-action-bar">
+      <button
+        wx:if="{{!userRegistration && activity.currentPlayers < activity.maxPlayers}}"
+        class="btn-primary"
+        bindtap="joinActivity">
+        报名参加
+      </button>
+      <button
+        wx:elif="{{!userRegistration && activity.currentPlayers >= activity.maxPlayers}}"
+        class="btn-primary btn-waitlist"
+        bindtap="joinActivity">
+        加入候补
+      </button>
+      <button
+        wx:elif="{{userRegistration && userRegistration.applyStatus === 'waiting' && !userRegistration.cancelStatus}}"
+        class="btn-cancel-reg"
+        bindtap="cancelWaitlist">
+        取消候补
+      </button>
+      <button
+        wx:elif="{{userRegistration && (userRegistration.applyStatus === 'active' || userRegistration.applyStatus === 'waiting') && !userRegistration.cancelStatus}}"
+        class="btn-cancel-reg"
+        bindtap="cancelRegistration">
+        取消报名
+      </button>
+    </view>
+
+    <view wx:if="{{voiceEnabled}}" class="voice-section {{voiceConfigured ? '' : 'voice-disabled'}}">
+      <view
+        class="voice-main {{voiceRecording ? 'recording' : ''}}"
+        bindtap="{{voiceRecording ? 'stopVoiceInput' : 'startVoiceInput'}}">
+        <text class="voice-mic">{{voiceRecording ? '■' : '🎙'}}</text>
+        <text class="voice-label">{{voiceRecording ? '点击结束' : '语音填分'}}</text>
+      </view>
+      <text class="voice-hint">{{voiceRecording ? '正在录音，再点一下结束' : voiceRecognizing ? '正在识别，请稍候...' : (voiceConfigured ? '说"第1场 21比19"即可记分' : '语音识别未配置，可手动输入比分')}}</text>
+    </view>
+
+    <view wx:if="{{voiceShowPanel && voiceResult}}" class="voice-confirm-bar">
+      <view class="voice-confirm-head">
+        <text class="voice-confirm-title">第 {{voiceResult.matchOrder || 1}} 场</text>
+        <text class="voice-confirm-score">{{voiceResult.team1Score}} : {{voiceResult.team2Score}}</text>
+      </view>
+      <view class="voice-confirm-btns">
+        <button class="voice-btn-cancel" bindtap="cancelVoiceResult">取消</button>
+        <button class="voice-btn-confirm" bindtap="confirmVoiceResult" disabled="{{voiceSubmitting}}">
+          {{voiceSubmitting ? '提交中...' : '确认记分'}}
+        </button>
       </view>
     </view>
 
-    <view wx:if="{{activity.status !== 'registering'}}" class="section detail-section">
-      <button class="btn-ranking" bindtap="goToRanking">
+    <view wx:if="{{activity.status !== 'registering'}}" class="section detail-section" style="display:flex;gap:16rpx;">
+      <button
+        wx:if="{{activity.status === 'finished' && (isOrganizer || userRegistration || agentRegistrations.length > 0)}}"
+        class="btn-ranking" style="flex:1;background:linear-gradient(135deg,#f6a53b 0%,#ee8f1d 100%);color:#fff;"
+        bindtap="goToReport">查看战报</button>
+      <button wx:if="{{activity.type === 'court-doubles'}}" class="btn-ranking" style="flex:1;" bindtap="goToCourtDetail">
+        场地计分 / 排名
+      </button>
+      <button class="btn-ranking" style="flex:1;" bindtap="goToRanking">
         查看排名
       </button>
     </view>
@@ -312,6 +526,101 @@
       <view class="cancel-modal-btns">
         <button class="cancel-modal-btn reject" bindtap="handleCancelFromModal" data-action="reject">拒绝</button>
         <button class="cancel-modal-btn approve" bindtap="handleCancelFromModal" data-action="approve">同意取消</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 调整容量弹窗 -->
+  <view wx:if="{{showCapacityModal}}" class="picker-mask" bindtap="hideCapacityModal">
+    <view class="picker-content" catchtap="stopPropagation">
+      <view class="picker-title">调整人数上限</view>
+      <view class="form-item">
+        <view class="form-label">当前人数上限</view>
+        <input
+          class="form-input"
+          type="number"
+          min="{{registrations.length}}"
+          max="100"
+          value="{{tempMaxPlayers}}"
+          bindinput="onMaxPlayersInput"/>
+        <view class="form-hint" style="margin-top:8rpx;font-size:24rpx;color:#999;">
+          最小值为当前报名人数 {{registrations.length}} 人。调小后超出的候补人员将自动变为报名成功。
+        </view>
+      </view>
+      <view class="picker-actions">
+        <button class="btn-cancel" bindtap="hideCapacityModal">取消</button>
+        <button class="btn-confirm" bindtap="submitCapacityChange">确认调整</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 代报名弹窗 -->
+  <view wx:if="{{showAgentModal}}" class="picker-mask" bindtap="hideAgentModal">
+    <view class="picker-content" catchtap="stopPropagation">
+      <view class="picker-title">代报名</view>
+      <view class="form-item">
+        <view class="form-label">姓名 *</view>
+        <input class="form-input" placeholder="请输入报名人姓名" value="{{agentName}}" bindinput="onAgentNameInput"/>
+      </view>
+      <view class="form-item">
+        <view class="form-label">手机号</view>
+        <input class="form-input" type="number" placeholder="可选" value="{{agentPhone}}" bindinput="onAgentPhoneInput"/>
+      </view>
+      <view class="form-item">
+        <view class="form-label">等级</view>
+        <view class="level-selector">
+          <view wx:for="{{[1,2,3,4,5,6,7,8,9,10]}}" wx:key="{{item}}" class="level-item {{agentLevel === item ? 'selected' : ''}}" bindtap="selectAgentLevel" data-level="{{item}}">
+            {{item}}级
+          </view>
+        </view>
+      </view>
+
+      <!-- 代报搭档选择 -->
+      <view wx:if="{{activity.type === 'fixed-doubles'}}" class="form-item">
+        <view class="form-label">选择搭档（可选）</view>
+        <view class="partner-list">
+          <view
+            class="partner-item {{agentPartnerId === '' ? 'selected' : ''}}"
+            bindtap="onSelectAgentPartner"
+            data-partnerid=""
+            style="padding: 12rpx 16rpx; border: 1rpx solid #e0e0e0; border-radius: 12rpx; margin-bottom: 8rpx;">
+            <text>不选搭档</text>
+          </view>
+          <view
+            wx:for="{{availablePartners}}"
+            wx:key="userId"
+            class="partner-item {{agentPartnerId === item.userId ? 'selected' : ''}}"
+            data-partnerid="{{item.userId}}"
+            bindtap="onSelectAgentPartner"
+            style="padding: 12rpx 16rpx; border: 1rpx solid #e0e0e0; border-radius: 12rpx; margin-bottom: 8rpx; display: flex; justify-content: space-between;">
+            <text>{{item.nickname || '未知'}}</text>
+            <text style="color: #999;">Lv.{{item.level || 5}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="picker-actions">
+        <button class="btn-cancel" bindtap="hideAgentModal">取消</button>
+        <button class="btn-confirm" bindtap="submitAgentRegistration">确认报名</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 代报等级修改弹窗 -->
+  <view wx:if="{{showAgentLevelPicker}}" class="picker-mask" bindtap="hideAgentLevelPicker">
+    <view class="picker-content" catchtap="stopPropagation">
+      <view class="picker-title">修改代报人等级</view>
+      <view class="form-item">
+        <view class="form-label">选择等级</view>
+        <view class="level-selector">
+          <view wx:for="{{[1,2,3,4,5,6,7,8,9,10]}}" wx:key="{{item}}" class="level-item {{agentLevelEditValue === item ? 'selected' : ''}}" bindtap="selectAgentEditLevel" data-level="{{item}}">
+            {{item}}级 {{levelDesc[item - 1]}}
+          </view>
+        </view>
+      </view>
+      <view class="picker-actions">
+        <button class="btn-cancel" bindtap="hideAgentLevelPicker">取消</button>
+        <button class="btn-confirm" bindtap="confirmAgentLevelEdit">确认修改</button>
       </view>
     </view>
   </view>
@@ -366,10 +675,16 @@
           <view class="form-label">选择搭档</view>
           <view class="partner-list">
             <view
+              class="partner-item {{inputPartnerId === '' ? 'selected' : ''}}"
+              bindtap="onSelectNoPartner"
+              style="padding: 12rpx 16rpx; border: 1rpx solid #e0e0e0; border-radius: 12rpx; margin-bottom: 8rpx;">
+              <text>不选搭档</text>
+            </view>
+            <view
               wx:for="{{availablePartners}}"
-              wx:key="user_id"
-              class="partner-item {{inputPartnerId === item.user_id ? 'selected' : ''}}"
-              data-partnerid="{{item.user_id}}"
+              wx:key="userId"
+              class="partner-item {{inputPartnerId === item.userId ? 'selected' : ''}}"
+              data-partnerid="{{item.userId}}"
               bindtap="onSelectPartner">
               <view class="avatar-text partner-avatar">{{item.nickname && item.nickname.length > 0 ? item.nickname[0] : '?'}}</view>
               <text class="partner-name">{{item.nickname || '未知'}}</text>
@@ -394,6 +709,14 @@
           当前选择：{{selectedLevel}}级
         </view>
 
+        <button
+          wx:if="{{activity.type === 'fixed-doubles' && userRegistration.partnerId}}"
+          class="btn-cancel-reg"
+          style="margin-top: 8rpx; margin-bottom: 24rpx;"
+          bindtap="unbindPartner">
+          解绑搭档
+        </button>
+
         <view class="form-item">
           <view class="form-label">选择等级</view>
           <view class="level-selector">
@@ -406,6 +729,36 @@
         <view class="picker-actions">
           <button class="btn-cancel" bindtap="hideLevelPicker">取消</button>
           <button class="btn-confirm" bindtap="confirmLevel">确认修改</button>
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <!-- AI 文案弹窗 -->
+  <view wx:if="{{showAiCopyModal}}" class="picker-mask" bindtap="closeAiCopy">
+    <view class="picker-content" catchtap="stopPropagation" style="max-height: 80vh;">
+      <view class="picker-title">AI 文案</view>
+
+      <view wx:if="{{aiCopyLoading}}" style="text-align: center; padding: 40rpx;">
+        <view class="loading-spinner"></view>
+        <text style="color: #999; font-size: 26rpx; margin-top: 16rpx;">AI 生成中...</text>
+      </view>
+
+      <block wx:else>
+        <view class="copy-tabs" style="display: flex; gap: 12rpx; margin-bottom: 20rpx;">
+          <view class="copy-tab {{aiCopyTab === 'announcement' ? 'active' : ''}}" bindtap="switchCopyTab" data-tab="announcement" style="flex:1; text-align:center; padding:16rpx; border-radius:12rpx; background:{{aiCopyTab === 'announcement' ? '#0ea56b' : '#f0f0f0'}}; color:{{aiCopyTab === 'announcement' ? '#fff' : '#333'}};">公告</view>
+          <view class="copy-tab {{aiCopyTab === 'share' ? 'active' : ''}}" bindtap="switchCopyTab" data-tab="share" style="flex:1; text-align:center; padding:16rpx; border-radius:12rpx; background:{{aiCopyTab === 'share' ? '#0ea56b' : '#f0f0f0'}}; color:{{aiCopyTab === 'share' ? '#fff' : '#333'}};">分享</view>
+          <view class="copy-tab {{aiCopyTab === 'invite' ? 'active' : ''}}" bindtap="switchCopyTab" data-tab="invite" style="flex:1; text-align:center; padding:16rpx; border-radius:12rpx; background:{{aiCopyTab === 'invite' ? '#0ea56b' : '#f0f0f0'}}; color:{{aiCopyTab === 'invite' ? '#fff' : '#333'}};">邀请</view>
+        </view>
+
+        <view style="background: #f9f9f9; border-radius: 12rpx; padding: 20rpx; min-height: 200rpx; font-size: 28rpx; line-height: 1.6; color: #333;">
+          {{aiCopyText || '暂无内容'}}
+        </view>
+
+        <view class="picker-actions" style="margin-top: 20rpx;">
+          <button class="btn-cancel" bindtap="closeAiCopy">关闭</button>
+          <button class="btn-confirm" bindtap="copyCopyText">复制</button>
+          <button class="btn-secondary" bindtap="regenerateCopy" style="margin-left: 12rpx;">重新生成</button>
         </view>
       </block>
     </view>

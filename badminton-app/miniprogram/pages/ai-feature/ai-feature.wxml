@@ -1,0 +1,28 @@
+<view class="feature-page">
+  <view wx:if="{{loading}}" class="loading">生成中...</view>
+
+  <block wx:if="{{!loading}}">
+    <view wx:if="{{suggestions.length === 0}}" class="empty">
+      <view class="btn-gen" bindtap="generate">生成精选建议</view>
+    </view>
+
+    <view wx:else>
+      <view wx:if="{{isTemplate}}" class="tpl-tag">模板建议</view>
+      <view class="sug-list">
+        <block wx:for="{{suggestions}}" wx:key="_id">
+          <view class="sug-item">
+            <image class="sug-img" src="{{item.fileID}}" mode="aspectFill" lazy-load binderror="onImgError"></image>
+            <view class="sug-info">
+              <text class="sug-reason">{{item.aiNote || '精选照片'}}</text>
+            </view>
+            <view class="sug-check" data-idx="{{index}}" bindtap="toggle">
+              <view class="{{item.checked ? 'box checked' : 'box'}}"></view>
+            </view>
+          </view>
+        </block>
+      </view>
+      <view class="btn-gen" bindtap="generate">重新生成</view>
+      <view class="btn-apply" bindtap="apply">一键采用</view>
+    </view>
+  </block>
+</view>

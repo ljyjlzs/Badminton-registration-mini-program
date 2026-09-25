@@ -1,0 +1,63 @@
+<view class="preview-page">
+  <view wx:if="{{loading}}" class="loading preview-loading">
+    <view class="loading-spinner"></view>
+    <text>正在生成分组方案...</text>
+  </view>
+
+  <view wx:if="{{!loading}}" class="preview-shell">
+    <view class="preview-hero">
+      <view class="hero-copy">
+        <view class="hero-badge">AI 分组预览</view>
+        <view class="hero-title">{{activityName}}</view>
+        <view class="hero-subtitle">{{typeLabel}} · 共 {{matchesCount}} 场比赛</view>
+      </view>
+      <view class="hero-stat-card">
+        <text class="stat-num">{{matchesCount}}</text>
+        <text class="stat-label">场</text>
+      </view>
+    </view>
+
+    <view wx:if="{{rules.length > 0}}" class="rules-card">
+      <view class="section-title">分组规则</view>
+      <view wx:for="{{rules}}" wx:key="index" class="rule-item">
+        <view class="rule-dot"></view>
+        <text class="rule-text">{{item}}</text>
+      </view>
+    </view>
+
+    <view class="teams-card">
+      <view class="teams-head">
+        <view>
+          <view class="section-title">队伍方案</view>
+          <view class="section-caption">预览结果与实际分组完全一致</view>
+        </view>
+        <view class="teams-count">{{teams.length}} 队</view>
+      </view>
+
+      <view wx:if="{{teams.length === 0}}" class="empty-tip">
+        <text class="empty-icon">👥</text>
+        <text class="empty-text">暂无报名用户</text>
+      </view>
+
+      <view wx:else class="team-list">
+        <view wx:for="{{teams}}" wx:key="index" class="team-card">
+          <view class="team-head">
+            <view class="team-index">{{item.index}}</view>
+            <view class="team-copy">
+              <text class="team-members">{{item.memberNamesText}}</text>
+              <text class="team-levels">等级合计 {{item.totalLevel}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{!loading}}" class="bottom-bar">
+    <button class="btn-cancel" bindtap="goBack">返回</button>
+    <button class="btn-secondary" bindtap="regenerateGrouping" style="margin-left: 12rpx;">重新生成</button>
+    <button class="btn-confirm" bindtap="confirmGrouping" disabled="{{confirming || teams.length === 0}}">
+      {{confirming ? '确认中...' : '确认分组'}}
+    </button>
+  </view>
+</view>

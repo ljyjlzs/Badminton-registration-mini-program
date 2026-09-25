@@ -1,3 +1,5 @@
 {
+  "navigationBarTitleText": "分组",
+  "enablePullDownRefresh": true,
   "usingComponents": {}
 }

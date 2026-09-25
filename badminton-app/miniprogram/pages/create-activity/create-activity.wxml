@@ -1,5 +1,28 @@
 <view class="create-page">
   <view class="page-shell">
+    <view wx:if="{{aiEnabled}}" class="ai-entry">
+      <view class="ai-entry-icon">AI</view>
+      <input
+        class="ai-entry-input"
+        placeholder='试试"周六下午3点老地方，8人双打轮转"'
+        value="{{aiInput}}"
+        confirm-type="send"
+        bindinput="onAiInput"
+        bindconfirm="parseActivity"/>
+      <button class="ai-entry-btn" bindtap="parseActivity">发送</button>
+    </view>
+
+    <ai-suggestion
+      wx:if="{{aiSuggestion.show}}"
+      title="{{aiSuggestion.title}}"
+      desc="{{aiSuggestion.desc}}"
+      loading="{{aiSuggestion.loading}}"
+      suggestions="{{aiSuggestion.suggestions || []}}"
+      confirm-text="保留预填"
+      cancel-text="还原"
+      bind:confirm="applyAiDraft"
+      bind:cancel="discardAiDraft"/>
+
     <view class="form-hero">
       <view class="hero-badge">NEW ACTIVITY</view>
       <view class="hero-title">创建一场新比赛</view>
@@ -40,12 +63,28 @@
             bindtap="onTypeChange">
             双打固搭
           </view>
+          <view
+            class="type-btn {{activityType === 'court-doubles' ? 'active' : ''}}"
+            data-type="court-doubles"
+            bindtap="onTypeChange">
+            按场地双打
+          </view>
         </view>
       </view>
+
     </view>
 
     <view class="form-section">
       <view class="form-title">时间与地点</view>
+
+      <view class="form-item">
+        <view class="form-label">所在地区 *</view>
+        <picker mode="region" bindchange="onRegionChange">
+          <view class="picker-value region-picker-value">
+            {{regionText || '请选择省 / 市 / 区'}}
+          </view>
+        </picker>
+      </view>
 
       <view class="form-item">
         <view class="form-label">活动地点 *</view>
@@ -84,18 +123,95 @@
         </view>
       </view>
 
-      <view class="form-item">
+      <view class="recommend-entry">
+        <button class="btn-recommend" bindtap="fetchRecommend">智能推荐开赛时间</button>
+        <view wx:if="{{recommend.show}}" class="recommend-panel">
+          <view class="recommend-panel-head">
+            <text class="recommend-title">推荐开赛时间</text>
+            <text class="recommend-close" bindtap="closeRecommend">收起</text>
+          </view>
+          <view wx:if="{{recommend.loading}}" class="recommend-loading">分析中...</view>
+          <block wx:else>
+            <view wx:if="{{recommend.aiNote}}" class="recommend-ainote">{{recommend.aiNote}}</view>
+            <view wx:if="{{!recommend.reliable && recommend.list.length}}" class="recommend-fallback">
+              历史样本较少，以下推荐仅供参考
+            </view>
+            <view wx:for="{{recommend.list}}" wx:key="index" class="recommend-card"
+              data-index="{{index}}" bindtap="applyRecommend">
+              <view class="recommend-card-main">
+                <text class="recommend-week">{{item.weekdayLabel}} {{item.slot}}</text>
+                <text class="recommend-time">{{item.suggestedTime || item.weekdayLabel + ' ' + item.slot}}</text>
+              </view>
+              <view class="recommend-card-sub">
+                <text wx:if="{{item.avgAttendanceRate !== null}}">平均满员率 {{item.avgAttendanceRate * 100}}%</text>
+                <text wx:if="{{item.sampleCount}}"> · 基于 {{item.sampleCount}} 场</text>
+              </view>
+              <view wx:if="{{item.reason}}" class="recommend-reason">{{item.reason}}</view>
+            </view>
+            <view wx:if="{{!recommend.list.length && !recommend.fallbackTip}}" class="recommend-empty">
+              暂无可推荐时间，先凭经验创建一场吧
+            </view>
+          </block>
+        </view>
+      </view>
+
+      <view class="form-item" wx:if="{{activityType !== 'court-doubles'}}">
         <view class="form-label">人数要求</view>
         <view class="player-info">
           <view class="player-chip">
             <text class="player-label">最少开赛</text>
             <text class="player-value">{{minPlayers}} 人</text>
           </view>
-          <view class="player-chip">
-            <text class="player-label">最多报名</text>
-            <text class="player-value">{{maxPlayers}} 人</text>
+          <view class="player-chip player-chip-input">
+            <text class="player-label">报名人数上限</text>
+            <view class="player-input-row">
+              <input
+                class="player-input"
+                type="number"
+                min="3"
+                max="100"
+                value="{{maxPlayers}}"
+                bindinput="onMaxPlayersInput"/>
+              <text class="player-unit">人</text>
+            </view>
           </view>
         </view>
+        <view class="form-hint">超过人数上限后自动进入候补</view>
+      </view>
+
+      <view class="form-item" wx:if="{{activityType === 'court-doubles'}}">
+        <view class="form-label">每场人数（按场地双打）</view>
+        <view class="player-info">
+          <view class="player-chip">
+            <text class="player-label">最少开赛</text>
+            <text class="player-value">{{minPlayers}} 人</text>
+          </view>
+          <view class="player-chip player-chip-input">
+            <text class="form-label">每场人数</text>
+            <view class="player-input-row">
+              <input
+                class="player-input"
+                type="number"
+                min="4"
+                max="100"
+                value="{{playersPerCourt}}"
+                bindinput="onPlayersPerCourtInput"/>
+              <text class="player-unit">人</text>
+            </view>
+          </view>
+        </view>
+        <view class="form-hint">创建后默认 1 个场地，报名上限 = 每场人数；可在划分页随时添加场地或调整每场人数。</view>
+      </view>
+    </view>
+
+    <view class="ai-section">
+      <view class="ai-bar" bindtap="showAiInput">
+        <view class="ai-bar-icon">🤖</view>
+        <view class="ai-bar-text">
+          <view class="ai-bar-title">AI 智能创建</view>
+          <view class="ai-bar-desc">描述你的活动需求，AI 帮你生成活动方案</view>
+        </view>
+        <view class="ai-bar-arrow">›</view>
       </view>
     </view>
 
@@ -104,7 +220,7 @@
       <view class="tip-item">你会成为活动组织者，后续可直接管理报名和赛程。</view>
       <view class="tip-item">报名人数达到 {{minPlayers}} 人后，就可以开始分组。</view>
       <view class="tip-item">活动最多允许 {{maxPlayers}} 人报名，超出后会自动显示已满。</view>
-      <view class="tip-item">报名后不能直接退出，需要由组织者确认取消申请。</view>
+      <view class="tip-item">最后一场比赛比完后，活动自动结束并显示排名。</view>
     </view>
 
     <view class="submit-bar">
@@ -114,6 +230,31 @@
         disabled="{{loading}}">
         {{loading ? '创建中...' : '创建活动'}}
       </button>
+    </view>
+  </view>
+
+  <!-- AI 对话框 -->
+  <view wx:if="{{showAiDialog}}" class="picker-mask" bindtap="hideAiDialog">
+    <view class="ai-dialog" catchtap="stopPropagation">
+      <view class="ai-dialog-header">
+        <text class="ai-dialog-title">AI 智能创建</text>
+        <text class="ai-dialog-close" bindtap="hideAiDialog">✕</text>
+      </view>
+      <view class="ai-dialog-body">
+        <view class="ai-dialog-hint">描述你的活动需求，例如：</view>
+        <view class="ai-dialog-example">"明天晚上7点在奥体中心，单打活动"</view>
+        <textarea
+          class="ai-dialog-input"
+          placeholder="请输入活动需求描述..."
+          value="{{aiInput}}"
+          bindinput="onAiInput"
+          maxlength="500"
+          auto-height/>
+      </view>
+      <view class="ai-dialog-footer">
+        <button class="ai-dialog-btn-cancel" bindtap="hideAiDialog">取消</button>
+        <button class="ai-dialog-btn-confirm" bindtap="onAiGenerate">AI 生成</button>
+      </view>
     </view>
   </view>
 </view>

@@ -1,0 +1,20 @@
+<view class="ai-suggestion">
+  <view class="ai-suggestion-head">
+    <text class="ai-suggestion-title">{{title}}</text>
+    <text wx:if="{{desc}}" class="ai-suggestion-desc">{{desc}}</text>
+  </view>
+  <view wx:if="{{loading}}" class="ai-suggestion-loading">
+    <view class="loading-spinner"></view>
+    <text>分析中...</text>
+  </view>
+  <view wx:else class="ai-suggestion-list">
+    <view wx:for="{{suggestions}}" wx:key="index" class="ai-suggestion-item"
+      data-index="{{index}}" bindtap="onTapItem">
+      <text>{{item}}</text>
+    </view>
+  </view>
+  <view class="ai-suggestion-actions">
+    <button class="ai-cancel-btn" bindtap="onCancel">{{cancelText}}</button>
+    <button class="ai-confirm-btn" bindtap="onConfirm">{{confirmText}}</button>
+  </view>
+</view>

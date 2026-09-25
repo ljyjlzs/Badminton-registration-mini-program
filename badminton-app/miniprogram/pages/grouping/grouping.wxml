@@ -5,6 +5,18 @@
   </view>
 
   <view wx:if="{{!loading && activity}}" class="page-shell grouping-shell">
+    <!-- 全局横幅 -->
+    <view wx:if="{{globalBannerVisible}}" class="global-banner">
+      <view wx:if="{{globalCurrentText}}" class="global-banner-row live" bindtap="onGlobalBannerTap">
+        <view class="banner-dot"></view>
+        <text class="banner-text">{{globalCurrentText}}</text>
+      </view>
+      <view wx:if="{{globalNextText}}" class="global-banner-row">
+        <view class="banner-dot"></view>
+        <text class="banner-text">{{globalNextText}}</text>
+      </view>
+    </view>
+
     <view class="grouping-hero">
       <view class="hero-copy">
         <view class="hero-badge">GROUP STAGE</view>
@@ -29,14 +41,19 @@
       <text class="hint-text">比赛进行中，已完成 {{completedCount}} / {{matches.length}} 场</text>
     </view>
 
-    <view class="venue-list">
+    <view wx:if="{{matches.length === 0}}" class="empty-tip">
+      <text class="empty-icon">📋</text>
+      <text class="empty-text">尚未生成赛程</text>
+      <text class="empty-desc">组织者生成分组后将在此显示</text>
+    </view>
+
+    <view wx:else class="venue-list">
       <block wx:for="{{matches}}" wx:key="_id">
         <view class="match-shell">
           <view class="match-header">
             <view class="match-meta">
               <text class="match-badge">
                 <text wx:if="{{item.round === 'group'}}">小组赛</text>
-                <text wx:elif="{{item.round === 'challenge'}}">挑战赛</text>
                 <text wx:elif="{{item.round === 'final'}}">决赛</text>
               </text>
               <text class="match-title">{{item.venue}}</text>
@@ -45,15 +62,15 @@
               <text wx:if="{{item.status === 'pending'}}">待开始</text>
               <text wx:elif="{{item.status === 'playing'}}">比赛中</text>
               <text wx:elif="{{item.status === 'confirming'}}">待确认</text>
-              <text wx:elif="{{item.status === 'confirmed'}}">已结束</text>
+              <text wx:elif="{{item.status === 'finished'}}">已结束</text>
             </view>
           </view>
 
-          <view class="match-card {{item.status === 'confirmed' ? 'completed' : item.status === 'playing' ? 'playing' : item.status === 'confirming' ? 'confirming' : item.status === 'pending' ? 'pending' : ''}}">
+            <view class="match-card {{item.status === 'finished' ? 'completed' : item.status === 'playing' ? 'playing' : item.status === 'confirming' ? 'confirming' : item.status === 'pending' ? 'pending' : ''}}">
             <view class="card-shine"></view>
 
             <view class="match-teams">
-              <view class="team-info" data-teamid="{{item.team1_id}}" bindtap="startNaming">
+              <view class="team-info" data-teamid="{{item.team1_id}}" bindtap="{{isOrganizer && !locked ? 'startNaming' : ''}}">
                 <view class="team-avatar team1-avatar">
                   <text class="avatar-text">{{item.team1_name && item.team1_name.length > 0 ? item.team1_name[0] : '?'}}</text>
                 </view>
@@ -70,7 +87,7 @@
                 </view>
               </view>
 
-              <view class="team-info" data-teamid="{{item.team2_id}}" bindtap="startNaming">
+              <view class="team-info" data-teamid="{{item.team2_id}}" bindtap="{{isOrganizer && !locked ? 'startNaming' : ''}}">
                 <view class="team-avatar team2-avatar">
                   <text class="avatar-text">{{item.team2_name && item.team2_name.length > 0 ? item.team2_name[0] : '?'}}</text>
                 </view>
@@ -83,7 +100,7 @@
             </view>
 
             <view class="match-actions">
-              <view wx:if="{{item.status === 'confirmed'}}" class="score-display">
+              <view wx:if="{{item.status === 'finished'}}" class="score-display">
                 <text class="score-team">{{item.team1_score}}</text>
                 <text class="score-divider">:</text>
                 <text class="score-team">{{item.team2_score}}</text>
@@ -100,6 +117,27 @@
           </view>
         </view>
       </block>
+    </view>
+
+    <!-- 语音填分 -->
+    <view wx:if="{{voiceEnabled}}" class="voice-section" style="margin-top: 20rpx;">
+      <view class="voice-main {{voiceRecording ? 'recording' : ''}}" bindtap="{{voiceRecording ? 'stopVoiceInput' : 'startVoiceInput'}}">
+        <text class="voice-mic">{{voiceRecording ? '■' : '🎙'}}</text>
+        <text class="voice-label">{{voiceRecording ? '点击结束' : '语音填分'}}</text>
+      </view>
+      <text class="voice-hint">{{voiceRecording ? '正在录音，再点一下结束' : voiceRecognizing ? '正在识别...' : '说"第1场 21比19"即可记分'}}</text>
+    </view>
+
+    <!-- 语音确认弹窗 -->
+    <view wx:if="{{voiceShowPanel && voiceResult}}" class="voice-confirm-bar" style="margin-top: 16rpx;">
+      <view style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12rpx;">
+        <text style="font-weight: 700; font-size: 28rpx;">第 {{voiceResult.matchOrder || 1}} 场</text>
+        <text style="font-size: 32rpx; font-weight: 800; color: #0ea56b;">{{voiceResult.team1Score}} : {{voiceResult.team2Score}}</text>
+      </view>
+      <view style="display: flex; gap: 16rpx;">
+        <button class="btn-cancel" bindtap="closeVoicePanel">取消</button>
+        <button class="btn-confirm" bindtap="confirmVoiceScore">确认记分</button>
+      </view>
     </view>
 
     <view class="actions">

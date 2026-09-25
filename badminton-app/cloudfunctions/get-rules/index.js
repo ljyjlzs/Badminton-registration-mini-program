@@ -1,112 +1,51 @@
-// get-rules 云函数 - 获取比赛规则
+/**
+ * get-rules 云函数 - 读取活动规则
+ * 对齐 RulesServiceImpl：读 rules(type='rules')，无则返回 01 附录默认三套规则
+ */
 const cloud = require('wx-server-sdk');
 
-cloud.init({
-  env: cloud.DYNAMIC_CURRENT_ENV
-});
+const logger = require('./logger');
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const db = cloud.database();
 
-// 默认规则数据
-const defaultSections = [
+const DEFAULT_SECTIONS = [
   {
-    id: 'singles',
-    name: '单打',
-    icon: '🏸',
-    match_rules: [
-      '每场比赛采用21分制',
-      '先得21分者获胜',
-      '每人单独对阵，无搭档',
-      '比分需要双方确认后生效',
-      '比赛采用单循环赛制'
-    ],
-    scoring_rules: [
-      '胜者积分 = 自己的分数 - 对手的分数',
-      '败者积分 = 自己的分数 - 对手的分数（负数）',
-      '示例：比分21-15，胜者得+6分，败者得-6分',
-      '示例：比分21-19，胜者得+2分，败者得-2分'
-    ],
-    common_rules: [
-      '所有小组赛结束后，积分最高的选手进入挑战赛',
-      '挑战赛：胜者+10分，败者-10分',
-      '挑战赛后进入决赛：胜者+15分，败者-15分'
-    ]
+    type: 'singles',
+    title: '单打',
+    match_rules: '21 分制；每人单独对阵；提交即生效；单循环。',
+    scoring_rules: '积分=自己分−对手分（例 21-15 胜者+6/败者-6）。',
+    common_rules: ''
   },
   {
-    id: 'doubles',
-    name: '双打轮换',
-    icon: '🏸',
-    match_rules: [
-      '每场比赛采用21分制',
-      '系统自动均衡分组：高等级+低等级配对',
-      '每场比赛4人（2支队伍，每队2人）',
-      '比分需要双方确认后生效',
-      '搭档由系统随机分配，每轮可能不同'
-    ],
-    scoring_rules: [
-      '个人积分 = 自己的分数 - 对手的分数',
-      '队伍积分 = 队伍成员积分总和',
-      '示例：队伍A以21-15获胜，每人得+6分',
-      '示例：队伍B以15-21落败，每人得-6分'
-    ],
-    common_rules: [
-      '分组算法：按等级排序，最高+最低配对',
-      '所有小组赛结束后，积分最高的2人进入挑战赛',
-      '挑战赛：胜者+10分，败者-10分',
-      '挑战赛后进入决赛：胜者+15分，败者-15分'
-    ]
+    type: 'doubles',
+    title: '双打轮换',
+    match_rules: '21 分制；每场 4 人；每人至少与其他所有人搭档一次；循环轮转；重复组合开赛前提示确认。',
+    scoring_rules: '积分同上；排名按每场平均积分（总积分÷场次）。',
+    common_rules: ''
   },
   {
-    id: 'fixed-doubles',
-    name: '双打固搭',
-    icon: '🤝',
-    match_rules: [
-      '每场比赛采用21分制',
-      '报名时自选搭档，全程固定搭配',
-      '每场比赛4人（2支队伍，每队2人）',
-      '比分需要双方确认后生效',
-      '搭档关系在整个活动中不变'
-    ],
-    scoring_rules: [
-      '个人积分 = 自己的分数 - 对手的分数',
-      '队伍积分 = 队伍成员积分总和',
-      '示例：队伍A以21-15获胜，每人得+6分',
-      '示例：队伍B以15-21落败，每人得-6分'
-    ],
-    common_rules: [
-      '报名时需选择搭档，搭档需已报名',
-      '所有小组赛结束后，积分最高的2人进入挑战赛',
-      '挑战赛：胜者+10分，败者-10分',
-      '挑战赛后进入决赛：胜者+15分，败者-15分'
-    ]
+    type: 'fixed-doubles',
+    title: '双打固搭',
+    match_rules: '报名自选搭档全程固定；未配对者赛前按水平自动搭配。',
+    scoring_rules: '积分同上；排名按每场平均积分。',
+    common_rules: ''
   }
 ];
 
 exports.main = async (event, context) => {
+  const { action = 'get', payload = {} } = event;
   try {
-    const result = await db.collection('announcements')
-      .where({ type: 'rules' })
-      .limit(1)
-      .get();
-
-    if (result.data && result.data.length > 0 && result.data[0].sections) {
-      return {
-        success: true,
-        data: result.data[0].sections
-      };
+    if (action === 'get') {
+      const res = await db.collection('rules').where({ type: 'rules' }).limit(1).get();
+      if (res.data && res.data.length > 0) {
+        return { success: true, data: { sections: res.data[0].sections || DEFAULT_SECTIONS }, message: 'ok' };
+      }
+      return { success: true, data: { sections: DEFAULT_SECTIONS }, message: 'ok' };
     }
-
-    // 没有数据时返回默认规则
-    return {
-      success: true,
-      data: defaultSections
-    };
+    return { success: false, message: '未知 action: ' + action };
   } catch (err) {
-    console.error('获取规则失败:', err);
-    // 出错时也返回默认规则
-    return {
-      success: true,
-      data: defaultSections
-    };
+    logger.error('get-rules', (typeof action !== 'undefined' ? action : '-'), { err: err });
+    return { success: false, message: err.message || '获取规则失败' };
   }
 };

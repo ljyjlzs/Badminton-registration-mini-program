@@ -1,0 +1,9 @@
+{
+  "name": "badminton-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "羽毛球报名小程序（构建期脚本入口）",
+  "scripts": {
+    "check:components": "node scripts/check-components.js"
+  }
+}

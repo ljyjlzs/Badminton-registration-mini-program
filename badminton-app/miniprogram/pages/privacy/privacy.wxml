@@ -1,0 +1,63 @@
+<view class="policy-page">
+  <view class="policy-header">
+    <text class="policy-header-title">隐私政策</text>
+    <text class="policy-header-date">生效日期：2026年8月4日</text>
+  </view>
+  <view class="policy-body">
+    <view class="policy-section">
+      <text class="policy-section-title">引言</text>
+      <text class="policy-text">羽毛球竞赛管理小程序（以下简称"本小程序"）由个人开发者开发和运营。我们深知个人信息对您的重要性，并会严格按照法律法规的要求保护您的个人信息安全。本隐私政策旨在向您说明我们如何收集、使用、存储和保护您的个人信息，以及您所享有的相关权利。</text>
+    </view>
+    <view class="policy-section">
+      <text class="policy-section-title">一、我们收集的信息</text>
+      <text class="policy-text">1. 微信授权信息：当您使用本小程序时，我们会通过微信授权获取您的微信昵称、头像和OpenID，用于用户身份识别和活动报名。</text>
+      <text class="policy-text">2. 用户主动提供的信息：您在设置昵称、创建活动、报名参加活动时主动填写的信息，包括但不限于昵称、活动名称、活动地点等。</text>
+      <text class="policy-text">3. 位置信息：当您使用选择活动地点功能时，我们会申请获取您的位置权限，仅用于辅助您选择场地位置。</text>
+      <text class="policy-text">4. 设备信息：我们会收集您使用本小程序时的基本设备信息（如机型、操作系统版本），用于优化小程序运行体验。</text>
+    </view>
+    <view class="policy-section">
+      <text class="policy-section-title">二、信息的使用</text>
+      <text class="policy-text">1. 我们使用您的信息来提供核心功能服务：创建和管理羽毛球活动、报名参加活动、自动分组、比赛记分和排名等。</text>
+      <text class="policy-text">2. 我们使用您的OpenID作为用户唯一标识，用于关联您在各个活动中的数据。</text>
+      <text class="policy-text">3. 我们仅在提供服务的必要范围内使用您的信息，不会用于任何其他目的。</text>
+    </view>
+    <view class="policy-section">
+      <text class="policy-section-title">三、信息的存储与安全</text>
+      <text class="policy-text">1. 您的个人信息存储在微信云开发环境中（腾讯云），采用业界标准的安全措施保护数据安全。</text>
+      <text class="policy-text">2. 我们仅在实现服务目的所必需的时间内保留您的个人信息，除非法律法规有更长的保留要求。</text>
+      <text class="policy-text">3. 我们采取数据加密、访问控制等安全措施，防止未经授权的访问、使用或泄露。</text>
+    </view>
+    <view class="policy-section">
+      <text class="policy-section-title">四、AI 功能说明</text>
+      <text class="policy-text">本小程序提供 AI 智能助手功能，用于解答羽毛球比赛规则相关问题。该功能通过调用第三方 AI API 实现。当您使用 AI 功能时，您的提问内容会被发送至第三方 AI 服务进行处理。我们不会将您的个人信息随 AI 请求一同发送，仅发送您输入的问题文本。</text>
+      <text class="policy-text">AI 助手提供的内容仅供参考，不构成任何法律或专业建议。请以实际比赛规则为准。</text>
+    </view>
+    <view class="policy-section">
+      <text class="policy-section-title">五、信息的共享与披露</text>
+      <text class="policy-text">1. 我们不会主动将您的个人信息出售或分享给任何第三方。</text>
+      <text class="policy-text">2. 在以下情况下，我们可能会披露您的信息：获得您的明确同意；根据法律法规要求；保护我们或他人的合法权益所必需的。</text>
+      <text class="policy-text">3. 本小程序活动中，您的昵称会对同场活动的其他参与者可见，这是比赛组织的正常需要。</text>
+    </view>
+    <view class="policy-section">
+      <text class="policy-section-title">六、您的权利</text>
+      <text class="policy-text">1. 查阅权：您可以查看您在活动中填写的信息。</text>
+      <text class="policy-text">2. 更正权：您可以随时修改您的昵称和头像。</text>
+      <text class="policy-text">3. 删除权：您可以联系开发者删除您的个人数据。</text>
+      <text class="policy-text">4. 撤回同意：您可以通过微信"发现-小程序"删除本小程序来撤回同意。</text>
+    </view>
+    <view class="policy-section">
+      <text class="policy-section-title">七、未成年人保护</text>
+      <text class="policy-text">本小程序主要面向成年人用户。如果您是未成年人，请在监护人的指导和同意下使用本小程序。</text>
+    </view>
+    <view class="policy-section">
+      <text class="policy-section-title">八、政策更新</text>
+      <text class="policy-text">我们可能会不时更新本隐私政策。更新后的政策会在小程序内公布，并在生效前以适当方式通知您。</text>
+    </view>
+    <view class="policy-section">
+      <text class="policy-section-title">九、联系方式</text>
+      <text class="policy-text">如果您对本隐私政策有任何疑问或建议，请通过以下方式联系我们：</text>
+      <text class="policy-text">电子邮箱：ljyjlzs@163.com</text>
+      <text class="policy-text">GitHub：https://github.com/ljyjlzs</text>
+    </view>
+  </view>
+</view>

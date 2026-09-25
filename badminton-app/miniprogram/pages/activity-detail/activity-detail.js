@@ -1,5 +1,6 @@
 // 活动详情页面逻辑
-const app = getApp();
+var app = getApp();
+var callFunction = require('../../utils/request.js').callFunction;
 
 Page({
    data: {
@@ -15,127 +16,236 @@ Page({
      showCancelModal: false,
      cancelModalItem: null,
      selectedLevel: 5,
-    inputNickname: '',
-    inputAvatar: '',
-    inputPartnerId: '',
-    availablePartners: [],
+     inputNickname: '',
+     inputAvatar: '',
+     inputPartnerId: '',
+     availablePartners: [],
+     showCapacityModal: false,
+     tempMaxPlayers: 20,
+     showAgentModal: false,
+     agentName: '',
+     agentPhone: '',
+     agentLevel: 5,
+     waitlist: [],
+     agentRegistrations: [],
+     globalBannerVisible: false,
+     globalCurrentText: '',
+     globalNextText: '',
+     album: null,
+     voiceEnabled: false,
+     voiceConfigured: false,
+     voiceRecording: false,
+     voiceRecognizing: false,
+     voiceShowPanel: false,
+     voiceConfig: null,
+     voiceResult: null,
+     voiceSubmitting: false,
+     showAiCopyModal: false,
+     aiCopyLoading: false,
+     aiCopyTab: 'announcement',
+     aiCopyAnnouncement: '',
+     aiCopyShare: '',
+     aiCopyInvite: '',
+     aiCopyText: '',
+     agentPartnerId: '',
+     showAgentLevelPicker: false,
+     agentLevelEditId: '',
+     agentLevelEditValue: 5,
      levelDesc: ['萌新·娱乐场', '新手·养生球', '新手·进阶', '初学者提高', '熟手·小对抗', '中级爱好者', '中高级玩家', '高级爱好者', '高手·大对抗', '专业水平'],
-
-   stopPropagation: function() {},
+     stopPropagation: function() {},
+     submittingGroup: false,
      statusText: {
        'registering': '报名中',
        'grouping': '分组中',
        'playing': '比赛中',
-       'challenge': '挑战赛',
-       'final': '决赛',
        'finished': '已结束'
      }
    },
 
   onLoad: function(options) {
+    this._firstShowDone = false;
     if (options.id) {
       this.setData({ activityId: options.id });
+      this.setData({
+        voiceEnabled: !!(app.globalData && app.globalData.voiceEnabled),
+        voiceConfig: app.globalData && app.globalData.voiceConfig ? app.globalData.voiceConfig : null,
+        voiceConfigured: !!(app.globalData && app.globalData.voiceConfig && app.globalData.voiceConfig.secretId)
+      });
       this.loadActivityDetail();
     }
   },
 
   onShow: function() {
+    // PERF-17: 首次 onShow 不重复加载（onLoad 已加载，load 回调会刷新标题）
+    if (!this._firstShowDone) {
+      this._firstShowDone = true;
+      return;
+    }
     if (this.data.activityId) {
-      this.loadActivityDetail();
+      // UX-10: 二次进入静默刷新，避免 loading 闪烁
+      this.loadActivityDetail(true);
+      this._updateNavTitle();
     }
   },
 
-  loadActivityDetail: function() {
-    this.setData({ loading: true });
-    
-    const openid = app.globalData.openid;
-    
-    wx.cloud.callFunction({
-      name: 'get-activity-detail',
-      data: {
-        activityId: this.data.activityId,
-        openid: openid
-      },
-      success: res => {
-        this.setData({ loading: false });
-        
-        if (res.result && res.result.success) {
-          const data = res.result.data;
-          const activity = data.activity || {};
-          
-          if (!activity.type || (activity.type !== 'singles' && activity.type !== 'doubles' && activity.type !== 'fixed-doubles')) {
-            activity.type = 'doubles';
-          }
-          
-          const ts = activity.time;
-          let formattedTime = '待定';
-          if (ts && typeof ts === 'number') {
-            const d = new Date(ts);
-            formattedTime = `${d.getMonth() + 1}月${d.getDate()}日 ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
-          }
-          activity.formattedTime = formattedTime;
-          
-          const matches = data.matches || [];
-          const hasGroupMatches = matches.some(m => m.round === 'group');
-          const hasChallengeMatches = matches.some(m => m.round === 'challenge');
-          const hasFinalMatches = matches.some(m => m.round === 'final');
-          const allGroupFinished = hasGroupMatches && matches.filter(m => m.round === 'group').every(m => m.status === 'confirmed');
-          const allChallengeFinished = hasChallengeMatches && matches.filter(m => m.round === 'challenge').every(m => m.status === 'confirmed');
-          
-          this.setData({
-            activity: activity,
-            registrations: data.registrations || [],
-            matches: matches,
-            userRegistration: data.userRegistration || null,
-            isOrganizer: data.isOrganizer || false,
-            pendingCancelCount: data.pendingCancelCount || 0,
-            hasChallengeMatches: hasChallengeMatches,
-            hasFinalMatches: hasFinalMatches,
-            allGroupFinished: allGroupFinished,
-            allChallengeFinished: allChallengeFinished
-          });
-          
-          this.watchActivity();
-        } else {
-          wx.showToast({
-            title: (res.result && res.result.error) || '加载失败',
-            icon: 'none'
-          });
-        }
-      },
-      fail: err => {
-        this.setData({ loading: false });
-        console.error('加载活动详情失败：', err);
-        wx.showToast({
-          title: '加载失败',
-          icon: 'none'
-        });
+  _updateNavTitle: function() {
+    var name = this.data.activity && this.data.activity.name;
+    wx.setNavigationBarTitle({ title: name || '活动详情' });
+  },
+
+  onUnload: function() {
+    if (this._watcher) {
+      this._watcher.close();
+      this._watcher = null;
+    }
+  },
+
+  onHide: function() {
+    if (this._watcher) {
+      this._watcher.close();
+      this._watcher = null;
+    }
+  },
+
+  // UX-26: 下拉刷新（静默刷新，避免全屏 loading 闪烁）
+  onPullDownRefresh: function() {
+    this.loadActivityDetail(true);
+    wx.stopPullDownRefresh();
+  },
+
+  loadActivityDetail: function(silent) {
+    var self = this;
+    if (!silent) {
+      self.setData({ loading: true });
+    }
+
+    callFunction('get-activity-detail', 'detail', { activityId: self.data.activityId }).then(function(res) {
+      if (!silent) {
+        self.setData({ loading: false });
       }
+
+      if (res.success) {
+        var data = res.data;
+        var activity = data.activity || {};
+
+        if (!activity.type) activity.type = 'doubles';
+        var typeLabels = { singles: '单打', doubles: '双打轮转', 'fixed-doubles': '双打固搭', 'court-doubles': '按场地双打' };
+        activity.typeLabel = typeLabels[activity.type] || '双打轮转';
+
+        activity.formattedTime = self.formatTime(activity.time);
+
+        var openid = app.globalData && app.globalData.openid;
+        var userInfo = (app.globalData && app.globalData.userInfo) || {};
+        var myIds = [];
+        if (openid) myIds.push(String(openid));
+        if (userInfo.openid) myIds.push(String(userInfo.openid));
+        if (userInfo.userId) myIds.push(String(userInfo.userId));
+        if (userInfo._openid) myIds.push(String(userInfo._openid));
+
+        var teams = data.teams || [];
+        var userReg = data.userRegistration || null;
+
+        function teamHasMe(teamId) {
+          if (!teamId) return false;
+          if (userReg && userReg.teamId && String(userReg.teamId) === String(teamId)) return true;
+          for (var t = 0; t < teams.length; t++) {
+            if (String(teams[t].id) !== String(teamId)) continue;
+            var members = teams[t].members || [];
+            for (var mi = 0; mi < members.length; mi++) {
+              var mid = members[mi];
+              if (mid && typeof mid === 'object') {
+                mid = mid.userId || mid.openid || mid._openid || mid.id;
+              }
+              if (mid != null && myIds.indexOf(String(mid)) >= 0) return true;
+            }
+          }
+          return false;
+        }
+
+        var matches = (data.matches || []).filter(function(m) { return m.round !== 'challenge' && m.round !== 'final'; });
+        for (var k = 0; k < matches.length; k++) {
+          var m = matches[k];
+          m.team1DisplayName = m.team1_name || '队伍1';
+          m.team2DisplayName = m.team2_name || '队伍2';
+          m.team1MemberNames = m.team1_members || '';
+          m.team2MemberNames = m.team2_members || '';
+          m.team1AvatarText = (m.team1_members || '队').charAt(0);
+          m.team2AvatarText = (m.team2_members || '队').charAt(0);
+          // UX-11: 标记我的比赛
+          m.isMyMatch = teamHasMe(m.team1Id) || teamHasMe(m.team2Id) || teamHasMe(m.team1_id) || teamHasMe(m.team2_id);
+        }
+        var hasGroupMatches = false;
+        for (var i = 0; i < matches.length; i++) { if (matches[i].round === 'group') { hasGroupMatches = true; break; } }
+        var allGroupFinished = hasGroupMatches;
+        if (allGroupFinished) {
+          for (var j = 0; j < matches.length; j++) {
+            if (matches[j].round === 'group' && matches[j].status !== 'finished') { allGroupFinished = false; break; }
+          }
+        }
+
+        self.setData({
+          activity: activity,
+          registrations: data.registrations || [],
+          matches: matches,
+          teams: teams,
+          userRegistration: data.userRegistration || null,
+          isOrganizer: data.isOrganizer || false,
+          pendingCancelCount: data.pendingCancelCount || 0,
+          allGroupFinished: allGroupFinished,
+          waitlist: data.waitlist || [],
+          tempMaxPlayers: activity.maxPlayers || 20,
+          agentRegistrations: data.agentRegistrations || [],
+          album: data.album || null,
+          globalBannerVisible: !!(data.globalBanner && data.globalBanner.currentText),
+          globalCurrentText: data.globalBanner ? (data.globalBanner.currentText || '') : '',
+          globalNextText: data.globalBanner ? (data.globalBanner.nextText || '') : ''
+        });
+        self._updateNavTitle();
+
+        self.loadWeather();
+        var watcher = self._watcher;
+        if (!watcher) {
+          self.watchActivity();
+        }
+      } else {
+        wx.showToast({ title: res.message || '加载失败', icon: 'none' });
+      }
+    }).catch(function(err) {
+      if (!silent) {
+        self.setData({ loading: false });
+      }
+      console.error('加载活动详情失败：', err);
+      wx.showToast({ title: (err && err.message) || '加载失败', icon: 'none' });
     });
   },
 
   watchActivity: function() {
-    const db = wx.cloud.database();
-    const activityId = this.data.activityId;
+    var self = this;
+    if (self._watcher) {
+      self._watcher.close();
+      self._watcher = null;
+    }
+    var db = wx.cloud.database();
+    var activityId = self.data.activityId;
     if (!activityId) return;
-    
-    db.collection('activities').doc(activityId)
+
+    self._watcher = db.collection('activities').doc(activityId)
       .watch({
-        onChange: res => {
+        onChange: function(res) {
           if (res.docChanges && res.docChanges.length > 0) {
-            const change = res.docChanges[0];
+            var change = res.docChanges[0];
             if (change.updatedFields) {
-              const currentActivity = this.data.activity || {};
-              const updatedActivity = Object.assign({}, currentActivity, change.updatedFields);
-              this.setData({ activity: updatedActivity });
-              
+              var currentActivity = self.data.activity || {};
+              var updatedActivity = Object.assign({}, currentActivity, change.updatedFields);
+              self.setData({ activity: updatedActivity });
+
               if (change.updatedFields.status) {
-                this.loadActivityDetail();
+                self.loadActivityDetail();
               }
             }
           }
         },
-        onError: err => {
+        onError: function(err) {
           console.error('监听失败：', err);
         }
       });
@@ -150,17 +260,16 @@ Page({
       });
       return;
     }
-    const userInfo = app.globalData.userInfo || {};
-    const activity = this.data.activity || {};
-    const isFixedDoubles = activity.type === 'fixed-doubles';
+    var userInfo = app.globalData.userInfo || {};
+    var activity = this.data.activity || {};
+    var isFixedDoubles = activity.type === 'fixed-doubles';
     
-    // 计算可选搭档列表
-    const availablePartners = isFixedDoubles ? this.getAvailablePartners() : [];
+    var availablePartners = isFixedDoubles ? this.getAvailablePartners() : [];
     
     this.setData({
       showLevelPicker: true,
-      selectedLevel: this.data.userRegistration?.level || 5,
-      pickerLevel: (this.data.userRegistration?.level || 5) - 1,
+      selectedLevel: this.data.userRegistration ? this.data.userRegistration.level : 5,
+      pickerLevel: (this.data.userRegistration ? this.data.userRegistration.level : 5) - 1,
       inputNickname: userInfo.nickname || '',
       inputAvatar: userInfo.avatar || '',
       inputPartnerId: '',
@@ -175,7 +284,7 @@ Page({
   },
 
   onChooseJoinAvatar: function(e) {
-    const avatarUrl = e.detail.avatarUrl;
+    var avatarUrl = e.detail.avatarUrl;
     if (avatarUrl) {
       this.uploadJoinAvatar(avatarUrl);
     }
@@ -186,75 +295,84 @@ Page({
   },
 
   onSelectPartner: function(e) {
-    const partnerId = e.currentTarget.dataset.partnerid;
+    var partnerId = e.currentTarget.dataset.partnerid;
     this.setData({ inputPartnerId: partnerId });
+  },
+
+  // 不选搭档
+  onSelectNoPartner: function() {
+    this.setData({ inputPartnerId: '' });
+  },
+
+  // 代报选择搭档
+  onSelectAgentPartner: function(e) {
+    var partnerId = e.currentTarget.dataset.partnerid;
+    this.setData({ agentPartnerId: partnerId });
   },
 
   // 获取可选择的搭档列表（已报名但还没配对的玩家，排除自己）
   getAvailablePartners: function() {
-    const registrations = this.data.registrations || [];
-    const openid = app.globalData.openid;
-    return registrations.filter(r => {
-      // 排除自己
-      if (r.user_id === openid) return false;
-      // 排除已有搭档的
-      if (r.partner_id) return false;
-      // 排除被别人选为搭档的（partner_id === 自己的 openid）
-      // 不需要，因为上面的 partner_id 已经处理了
+    var registrations = this.data.registrations || [];
+    var openid = app.globalData.openid;
+    return registrations.filter(function(r) {
+      if (r.userId === openid) return false;
+      if (r.partnerId) return false;
       return true;
     });
   },
 
   uploadJoinAvatar: function(tempFilePath) {
-    const activityId = this.data.activityId;
-    const cloudPath = `join_avatars/${activityId}/${Date.now()}.jpg`;
+    var self = this;
+    var activityId = self.data.activityId;
+    var cloudPath = 'join_avatars/' + activityId + '/' + Date.now() + '.jpg';
     
     wx.showLoading({ title: '上传中...' });
     
     wx.cloud.uploadFile({
       cloudPath: cloudPath,
       filePath: tempFilePath,
-      success: (res) => {
+      success: function(res) {
         wx.hideLoading();
         console.log('头像上传成功:', res.fileID);
-        this.setData({ inputAvatar: res.fileID });
+        self.setData({ inputAvatar: res.fileID });
       },
-      fail: (err) => {
+      fail: function(err) {
         wx.hideLoading();
         console.error('头像上传失败，使用临时路径:', err);
-        // 如果上传失败，使用临时路径（自己能看到，他人看不到）
-        this.setData({ inputAvatar: tempFilePath });
+        self.setData({ inputAvatar: tempFilePath });
         wx.showToast({ title: '头像可能仅自己可见', icon: 'none', duration: 2000 });
       }
     });
   },
 
   uploadAvatarForJoin: function() {
+    var self = this;
     wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
       sourceType: ['album', 'camera'],
-      success: (res) => {
-        const tempFilePath = res.tempFiles[0].tempFilePath;
-        this.saveJoinAvatarToCloud(tempFilePath);
+      success: function(res) {
+        var tempFilePath = res.tempFiles[0].tempFilePath;
+        self.saveJoinAvatarToCloud(tempFilePath);
       }
     });
   },
 
   saveJoinAvatarToCloud: function(filePath) {
-    const activityId = this.data.activityId;
-    const cloudPath = `join_avatars/${activityId}/${Date.now()}.jpg`;
+    var self = this;
+    var activityId = self.data.activityId;
+    var cloudPath = 'join_avatars/' + activityId + '/' + Date.now() + '.jpg';
     
     wx.showLoading({ title: '上传中...' });
     
     wx.cloud.uploadFile({
       cloudPath: cloudPath,
       filePath: filePath,
-      success: (res) => {
+      success: function(res) {
         wx.hideLoading();
-        this.setData({ inputAvatar: res.fileID });
-      },
-      fail: () => {
+        self.setData({ inputAvatar: res.fileID });
+      }.bind(this),
+      fail: function() {
         wx.hideLoading();
         wx.showToast({ title: '上传失败', icon: 'none' });
       }
@@ -266,8 +384,8 @@ Page({
   },
 
    onLevelChange: function(e) {
-     const pickerIndex = parseInt(e.detail.value[0]);
-     const newLevel = pickerIndex + 1;
+     var pickerIndex = parseInt(e.detail.value[0]);
+     var newLevel = pickerIndex + 1;
      console.log('picker选择:', pickerIndex, '实际等级:', newLevel);
      this.setData({
        pickerLevel: pickerIndex,
@@ -276,7 +394,7 @@ Page({
    },
 
    selectLevel: function(e) {
-     const level = parseInt(e.currentTarget.dataset.level);
+     var level = parseInt(e.currentTarget.dataset.level);
      console.log('直接选择等级:', level);
      this.setData({
        selectedLevel: level,
@@ -285,45 +403,25 @@ Page({
    },
 
   confirmLevel: function() {
-    const pickerLevel = this.data.pickerLevel;
-    const level = pickerLevel + 1;
-    const activityId = this.data.activityId;
+    var self = this;
+    var pickerLevel = self.data.pickerLevel;
+    var level = pickerLevel + 1;
+    var activityId = self.data.activityId;
     
-    console.log('修改等级参数:', { activityId, level, pickerLevel });
-    
-    wx.cloud.callFunction({
-      name: 'update-user-level',
-      data: {
-        activityId: activityId,
-        level: level
-      },
-      success: res => {
-        console.log('修改等级返回:', res);
-        if (res.result && res.result.success) {
-          this.setData({
-            'userRegistration.level': res.result.data.level,
-            showLevelPicker: false
-          });
-          wx.showToast({
-            title: '等级已更新',
-            icon: 'success'
-          });
-          // 重新加载活动详情以确保数据一致
-          this.loadActivityDetail();
-        } else {
-          wx.showToast({
-            title: res.result?.error || '修改失败',
-            icon: 'none'
-          });
-        }
-      },
-      fail: err => {
-        console.error('修改等级失败:', err);
-        wx.showToast({
-          title: '修改失败',
-          icon: 'none'
+    callFunction('update-registration-level', 'update', { activityId: activityId, level: level }).then(function(res) {
+      if (res.success) {
+        self.setData({
+          'userRegistration.level': res.data.level,
+          showLevelPicker: false
         });
+        wx.showToast({ title: '等级已更新', icon: 'success' });
+        self.loadActivityDetail();
+      } else {
+        wx.showToast({ title: res.message || '修改失败', icon: 'none' });
       }
+    }).catch(function(err) {
+      console.error('修改等级失败:', err);
+      wx.showToast({ title: '修改失败', icon: 'none' });
     });
   },
 
@@ -334,90 +432,107 @@ Page({
   },
 
   doJoin: function() {
-    const nickname = this.data.inputNickname.trim();
-    const avatar = this.data.inputAvatar;
-    const level = this.data.selectedLevel;
-    const activity = this.data.activity || {};
-    const isFixedDoubles = activity.type === 'fixed-doubles';
-    const partnerId = this.data.inputPartnerId || '';
-    
+    var self = this;
+    var nickname = self.data.inputNickname.trim();
+    var avatar = self.data.inputAvatar;
+    var level = self.data.selectedLevel;
+    var activity = self.data.activity || {};
+    var isFixedDoubles = activity.type === 'fixed-doubles';
+    var partnerId = self.data.inputPartnerId || '';
+
     if (!nickname) {
-      wx.showToast({
-        title: '请输入您的名字',
-        icon: 'none'
-      });
+      wx.showToast({ title: '请输入您的名字', icon: 'none' });
       return;
     }
-    
+
     if (nickname.length < 2) {
-      wx.showToast({
-        title: '名字至少2个字符',
-        icon: 'none'
-      });
+      wx.showToast({ title: '名字至少2个字符', icon: 'none' });
       return;
     }
-    
-    // 固搭活动：如果有可选搭档则必须选择
-    if (isFixedDoubles && !partnerId && this.data.availablePartners.length > 0) {
-      wx.showToast({ title: '双打固搭请选择搭档', icon: 'none' });
-      return;
-    }
-    
-    wx.showLoading({ title: '报名中...' });
-    wx.cloud.callFunction({
-      name: 'join-activity',
-      data: {
-        activityId: this.data.activityId,
+
+    // 搭档可选：不强制选搭档（与代报弹窗"可选"语义对齐）
+
+    // UX-02：报名前申请订阅消息一次性授权（拒绝也继续报名）
+    var subscribe = require('../../utils/subscribe.js');
+    subscribe.requestSubscribe('join', function() {
+      wx.showLoading({ title: '报名中...' });
+      callFunction('join-activity', 'join', {
+        activityId: self.data.activityId,
         level: level,
         nickname: nickname,
         avatar: avatar,
         partnerId: isFixedDoubles ? partnerId : undefined
-      },
-      success: res => {
+      }).then(function(res) {
         wx.hideLoading();
-        if (res.result && res.result.success) {
-          // 同步昵称到全局状态和首页显示
+        if (res.success) {
           if (nickname && app.globalData.userInfo) {
             app.globalData.userInfo.nickname = nickname;
           }
-          // 同步更新 users 表的昵称
-          wx.cloud.callFunction({
-            name: 'update-user-info',
-            data: { nickname: nickname },
-            fail: () => {} // 静默失败，不影响报名结果
+          callFunction('update-user-info', 'update', { nickname: nickname }).catch(function() {
+            wx.showToast({ title: '昵称保存失败', icon: 'none' });
           });
-          wx.showToast({
-            title: '报名成功',
-            icon: 'success'
-          });
-          this.hideLevelPicker();
-          this.loadActivityDetail();
+          // BUG-69: 读后端 2 小时时间冲突检测结果并提示
+          var joinData = res.data || {};
+          if (joinData.hasConflict) {
+            var conflictNames = (joinData.conflicts || []).map(function(c) { return c.name; }).filter(Boolean).join('、');
+            wx.showModal({
+              title: '报名成功（时间冲突）',
+              content: '已报名成功。但与' + (conflictNames || '其他活动') + '时间接近（2小时内），请注意合理安排。',
+              showCancel: false
+            });
+          } else {
+            wx.showToast({ title: res.message || '报名成功', icon: 'success' });
+          }
+          self.hideLevelPicker();
+          self.loadActivityDetail();
         } else {
-          wx.showToast({
-            title: res.result?.error || '报名失败',
-            icon: 'none'
-          });
-        }
-      },
-      fail: err => {
-        wx.hideLoading();
-        wx.showToast({
-          title: '报名失败',
-          icon: 'none'
-        });
+        wx.showToast({ title: res.message || '报名失败', icon: 'none' });
       }
+    }).catch(function(err) {
+      wx.hideLoading();
+      wx.showToast({ title: (err && err.message) || '报名失败', icon: 'none' });
+    });
     });
   },
 
   startGrouping: function() {
-    // 双打/固搭校验：需要偶数人数
-    const activity = this.data.activity;
-    const registrations = this.data.registrations;
+    var self = this;
+    if (self.data.submittingGroup) return;
+    var activity = self.data.activity;
+    var registrations = self.data.registrations;
+    if (activity && activity.type === 'court-doubles') {
+      wx.showModal({
+        title: '生成场地赛程',
+        content: '按当前场地分配生成轮转双打赛程？',
+        success: function(res) {
+          if (res.confirm) {
+            self.setData({ submittingGroup: true });
+            wx.showLoading({ title: '生成中...' });
+            callFunction('court-start', 'generate', { activityId: self.data.activityId }).then(function(res) {
+              wx.hideLoading();
+              self.setData({ submittingGroup: false });
+              if (res.success) {
+                wx.showToast({ title: '已生成', icon: 'success' });
+                self.loadActivityDetail();
+              } else {
+                wx.showToast({ title: res.message || '生成失败', icon: 'none', duration: 3000 });
+              }
+            }).catch(function(err) {
+              wx.hideLoading();
+              self.setData({ submittingGroup: false });
+              console.error('生成失败:', err);
+              wx.showToast({ title: (err && err.message) || '生成失败', icon: 'none', duration: 3000 });
+            });
+          }
+        }
+      });
+      return;
+    }
     if (activity && activity.type !== 'singles' && registrations.length % 2 !== 0) {
-      const typeLabel = activity.type === 'fixed-doubles' ? '双打固搭' : '双打';
+      var typeLabel = activity.type === 'fixed-doubles' ? '双打固搭' : '双打';
       wx.showModal({
         title: '人数不足',
-        content: `${typeLabel}比赛需要偶数人数，当前${registrations.length}人。请增加或减少1人后再开始分组。`,
+        content: typeLabel + '比赛需要偶数人数，当前' + registrations.length + '人。请增加或减少1人后再开始分组。',
         showCancel: false
       });
       return;
@@ -426,39 +541,21 @@ Page({
     wx.showModal({
       title: '确认开始分组',
       content: '分组后不能再报名，是否继续？',
-      success: res => {
+      success: function(res) {
         if (res.confirm) {
           wx.showLoading({ title: '分组中...' });
-          wx.cloud.callFunction({
-            name: 'start-grouping',
-            data: {
-              activityId: this.data.activityId
-            },
-            success: res => {
-              wx.hideLoading();
-              if (res.result && res.result.success) {
-                wx.showToast({
-                  title: '分组完成',
-                  icon: 'success'
-                });
-                this.loadActivityDetail();
-              } else {
-                wx.showToast({
-                  title: res.result?.error || '分组失败',
-                  icon: 'none',
-                  duration: 3000
-                });
-              }
-            },
-            fail: err => {
-              wx.hideLoading();
-              console.error('分组失败:', err);
-              wx.showToast({
-                title: '分组失败: ' + (err.message || err.errMsg || '未知错误'),
-                icon: 'none',
-                duration: 3000
-              });
+          callFunction('start-grouping', 'apply', { activityId: self.data.activityId }).then(function(res) {
+            wx.hideLoading();
+            if (res.success) {
+              wx.showToast({ title: '分组完成', icon: 'success' });
+              self.loadActivityDetail();
+            } else {
+              wx.showToast({ title: res.message || '分组失败', icon: 'none', duration: 3000 });
             }
+          }).catch(function(err) {
+            wx.hideLoading();
+            console.error('分组失败:', err);
+            wx.showToast({ title: (err && err.message) || '分组失败', icon: 'none', duration: 3000 });
           });
         }
       }
@@ -466,249 +563,595 @@ Page({
   },
 
   goToMatch: function(e) {
-    const matchId = e.currentTarget.dataset.id;
+    var matchId = e.currentTarget.dataset.id;
     wx.navigateTo({
-      url: `/pages/match-score/match-score?activityId=${this.data.activityId}&matchId=${matchId}`
+      url: '/pages/match-score/match-score?activityId=' + this.data.activityId + '&matchId=' + matchId
     });
   },
 
   goToGrouping: function() {
     wx.navigateTo({
-      url: `/pages/grouping/grouping?activityId=${this.data.activityId}`
+      url: '/pages/grouping/grouping?activityId=' + this.data.activityId + ''
     });
-  },
-
-  startChallenge: function() {
-    wx.showModal({
-      title: '开始挑战赛',
-      content: '确认所有小组赛已结束？挑战赛中胜者+10分',
-      success: res => {
-        if (res.confirm) {
-          wx.showLoading({ title: '创建挑战赛...' });
-          wx.cloud.callFunction({
-            name: 'start-challenge',
-            data: {
-              activityId: this.data.activityId
-            },
-            success: res => {
-              wx.hideLoading();
-              if (res.result.success) {
-                wx.showToast({
-                  title: res.result.data.message || '挑战赛已开始',
-                  icon: 'success'
-                });
-                this.loadActivityDetail();
-              } else {
-                wx.showToast({
-                  title: res.result.error || '创建失败',
-                  icon: 'none'
-                });
-              }
-            },
-            fail: err => {
-              wx.hideLoading();
-              wx.showToast({ title: '创建失败', icon: 'none' });
-            }
-          });
-        }
-      }
-    });
-  },
-
-  startFinal: function() {
-    wx.showModal({
-      title: '开始决赛',
-      content: '确认所有挑战赛已结束？决赛胜者+15分',
-      success: res => {
-        if (res.confirm) {
-          wx.showLoading({ title: '创建决赛...' });
-          wx.cloud.callFunction({
-            name: 'start-final',
-            data: {
-              activityId: this.data.activityId
-            },
-            success: res => {
-              wx.hideLoading();
-              if (res.result.success) {
-                wx.showToast({
-                  title: '决赛已开始',
-                  icon: 'success'
-                });
-                this.loadActivityDetail();
-              } else {
-                wx.showToast({
-                  title: res.result.error || '创建失败',
-                  icon: 'none'
-                });
-              }
-            },
-            fail: err => {
-              wx.hideLoading();
-              wx.showToast({ title: '创建失败', icon: 'none' });
-            }
-          });
-        }
-      }
-    });
-  },
-
-  startAllChallenge: function() {
-    const matches = this.data.matches.filter(m => m.round === 'challenge' && m.status === 'pending');
-    if (matches.length === 0) {
-      wx.showToast({ title: '没有待开始的挑战赛', icon: 'none' });
-      return;
-    }
-    wx.showModal({
-      title: '开始挑战赛',
-      content: `确定开始 ${matches.length} 场挑战赛吗？`,
-      success: res => {
-        if (res.confirm) {
-          this.doStartAllMatches(matches);
-        }
-      }
-    });
-  },
-
-  startAllFinal: function() {
-    const matches = this.data.matches.filter(m => m.round === 'final' && m.status === 'pending');
-    if (matches.length === 0) {
-      wx.showToast({ title: '没有待开始的决赛', icon: 'none' });
-      return;
-    }
-    wx.showModal({
-      title: '开始决赛',
-      content: `确定开始 ${matches.length} 场决赛吗？`,
-      success: res => {
-        if (res.confirm) {
-          this.doStartAllMatches(matches);
-        }
-      }
-    });
-  },
-
-  doStartAllMatches: async function(matches) {
-    wx.showLoading({ title: '开始中...' });
-    
-    let successCount = 0;
-    let failCount = 0;
-    
-    for (const match of matches) {
-      try {
-        const res = await wx.cloud.callFunction({
-          name: 'start-match',
-          data: {
-            activityId: this.data.activityId,
-            matchId: match._id
-          }
-        });
-        
-        if (res.result && res.result.success) {
-          successCount++;
-        } else {
-          failCount++;
-        }
-      } catch (e) {
-        failCount++;
-      }
-    }
-    
-    wx.hideLoading();
-    
-    if (failCount === 0) {
-      wx.showToast({ title: '比赛已开始', icon: 'success' });
-      this.loadActivityDetail();
-    } else {
-      wx.showToast({ title: `${successCount}场成功，${failCount}场失败`, icon: 'none' });
-    }
   },
 
   goToRanking: function() {
     wx.navigateTo({
-      url: `/pages/ranking/ranking?activityId=${this.data.activityId}`
+      url: '/pages/ranking/ranking?activityId=' + this.data.activityId + ''
     });
   },
 
-  formatTime: function(timeValue) {
-    if (!timeValue && timeValue !== 0) return '待定';
-    
-    let timestamp = timeValue;
-    
+  loadWeather: function() {
+    var self = this;
+    var activity = self.data.activity;
+    if (!activity || !activity.location) return;
+    // COST-12: 30 分钟内存/Storage 缓存
+    var cacheKey = 'weather_' + (self.data.activityId || '');
+    try {
+      var cache = wx.getStorageSync(cacheKey);
+      if (cache && cache.data && (Date.now() - cache.ts < 30 * 60 * 1000)) {
+        self.setData({ weather: cache.data });
+        return;
+      }
+    } catch (e) {}
+    callFunction('weather', 'get', { city: activity.location }).then(function(res) {
+      if (res && res.success !== false) {
+        var weatherData = (res.data && res.data.data) || res.data || {};
+        if (weatherData && weatherData.weather && typeof weatherData.weather === 'object') {
+          weatherData = weatherData.weather;
+        }
+        var weatherObj = {
+          dayweather: weatherData.dayweather || weatherData.weather || '',
+          nightweather: weatherData.nightweather || '',
+          daytemp: weatherData.daytemp != null ? weatherData.daytemp : (weatherData.temperature != null ? weatherData.temperature : '--'),
+          nighttemp: weatherData.nighttemp != null ? weatherData.nighttemp : '',
+          daywind: weatherData.daywind || weatherData.windDirection || '',
+          daypower: weatherData.daypower || weatherData.windPower || ''
+        };
+        self.setData({ weather: weatherObj });
+        try {
+          wx.setStorageSync(cacheKey, { ts: Date.now(), data: weatherObj });
+        } catch (e) {}
+      }
+    }).catch(function() {});
+  },
+
+  goToPhotoAlbum: function() {
+    wx.navigateTo({ url: '/pages/photo-album/photo-album?activityId=' + this.data.activityId + '' });
+  },
+
+  goToReport: function() {
+    wx.navigateTo({ url: '/pages/report/report?activityId=' + this.data.activityId + '' });
+  },
+
+  goToActivityReport: function() {
+    wx.navigateTo({ url: '/pages/activity-report/activity-report?activityId=' + this.data.activityId + '' });
+  },
+
+  goToRecommendTime: function() {
+    wx.navigateTo({ url: '/pages/recommend-time/recommend-time?activityId=' + this.data.activityId + '' });
+  },
+
+  goToInvite: function() {
+    wx.navigateTo({ url: '/pages/invite-candidates/invite-candidates?activityId=' + this.data.activityId + '' });
+  },
+
+  goToInvitePage: function() {
+    wx.navigateTo({ url: '/pages/invite/invite?activityId=' + this.data.activityId + '' });
+  },
+
+  goToCourtDetail: function() {
+    wx.navigateTo({
+      url: '/pages/court-detail/court-detail?activityId=' + this.data.activityId + ''
+    });
+  },
+
+  // ===== T5 容量调整 =====
+  showCapacityModal: function() {
+    this.setData({
+      showCapacityModal: true,
+      tempMaxPlayers: this.data.activity.maxPlayers || 20
+    });
+  },
+  hideCapacityModal: function() {
+    this.setData({ showCapacityModal: false });
+  },
+  onMaxPlayersInput: function(e) {
+    // BUG-42: 上限 100，防止输入过大人数上限
+    this.setData({ tempMaxPlayers: Math.min(100, parseInt(e.detail.value) || 20) });
+  },
+  submitCapacityChange: function() {
+    var self = this;
+    var val = Math.min(100, self.data.tempMaxPlayers);
+    var current = self.data.registrations.length || 0;
+    if (val < current) {
+      wx.showToast({ title: '不能小于当前报名人数', icon: 'none' });
+      return;
+    }
+    wx.showLoading({ title: '调整中...' });
+    callFunction('update-activity-status', 'update', {
+      activityId: self.data.activityId,
+      maxPlayers: val
+    }).then(function(res) {
+      wx.hideLoading();
+      if (res.success) {
+        wx.showToast({ title: '已调整', icon: 'success' });
+        self.setData({ showCapacityModal: false });
+        self.loadActivityDetail();
+      } else {
+        wx.showToast({ title: res.message || '调整失败', icon: 'none' });
+      }
+    }).catch(function() {
+      wx.hideLoading();
+      wx.showToast({ title: '调整失败', icon: 'none' });
+    });
+  },
+
+  // ===== T8 代报名 =====
+  showAgentModal: function() {
+    // 打开代报弹窗时填充可选搭档列表（此前为空，代报选不到人）
+    var availablePartners = (this.data.activity && this.data.activity.type === 'fixed-doubles') ? this.getAvailablePartners() : [];
+    this.setData({ showAgentModal: true, agentName: '', agentPhone: '', agentLevel: 5, agentPartnerId: '', availablePartners: availablePartners });
+  },
+  hideAgentModal: function() {
+    this.setData({ showAgentModal: false });
+  },
+  onAgentNameInput: function(e) { this.setData({ agentName: e.detail.value }); },
+  onAgentPhoneInput: function(e) { this.setData({ agentPhone: e.detail.value }); },
+  selectAgentLevel: function(e) {
+    this.setData({ agentLevel: parseInt(e.currentTarget.dataset.level) });
+  },
+  submitAgentRegistration: function() {
+    var self = this;
+    var nickname = self.data.agentName.trim();
+    if (!nickname) { wx.showToast({ title: '请输入姓名', icon: 'none' }); return; }
+    // UX-02：代报前同样申请订阅授权（拒绝也继续）
+    var subscribe = require('../../utils/subscribe.js');
+    subscribe.requestSubscribe('join', function() {
+      wx.showLoading({ title: '报名中...' });
+      callFunction('join-activity', 'join', {
+        activityId: self.data.activityId,
+        level: self.data.agentLevel,
+        nickname: nickname,
+        agent: true,
+        agentName: nickname,
+        agentPhone: self.data.agentPhone,
+        partnerId: self.data.agentPartnerId || undefined
+      }).then(function(res) {
+        wx.hideLoading();
+        if (res.success) {
+          // BUG-49: 回显云函数 res.message（已区分候补/正式文案）；isWaiting 仅决定缺省文案与图标
+          var isWaiting = !!(res.data && res.data.isWaiting);
+          var msg = res.message || (isWaiting ? '已加入候补名单' : '代报名成功');
+          wx.showToast({ title: msg, icon: isWaiting ? 'none' : 'success' });
+          self.setData({ showAgentModal: false });
+          self.loadActivityDetail();
+        } else {
+          wx.showToast({ title: res.message || '报名失败', icon: 'none' });
+        }
+      }).catch(function(err) {
+        wx.hideLoading();
+        wx.showToast({ title: (err && err.message) || '报名失败', icon: 'none' });
+      });
+    });
+  },
+
+  // 帮人报名入口（别名）
+  openAgentModal: function() {
+    this.showAgentModal();
+  },
+
+  // 取消候补
+  cancelWaitlist: function() {
+    var self = this;
+    wx.showModal({
+      title: '取消候补',
+      content: '确定取消候补吗？取消后需要重新报名。',
+      success: function(res) {
+        if (res.confirm) {
+          wx.showLoading({ title: '取消中...' });
+          callFunction('cancel-registration', 'cancel', { activityId: self.data.activityId }).then(function(res) {
+            wx.hideLoading();
+            if (res.success) {
+              wx.showToast({ title: '已取消候补', icon: 'success' });
+              self.loadActivityDetail();
+            } else {
+              wx.showToast({ title: res.message || '取消失败', icon: 'none' });
+            }
+          }).catch(function() {
+            wx.hideLoading();
+            wx.showToast({ title: '取消失败', icon: 'none' });
+          });
+        }
+      }
+    });
+  },
+
+  // 解绑搭档
+  unbindPartner: function() {
+    var self = this;
+    wx.showModal({
+      title: '解绑搭档',
+      content: '确定解绑搭档吗？解绑后双方都需要重新选择搭档。',
+      success: function(res) {
+        if (res.confirm) {
+          wx.showLoading({ title: '解绑中...' });
+          callFunction('unbind-partner', 'unbind', {
+            registrationId: self.data.userRegistration.id
+          }).then(function(res) {
+            wx.hideLoading();
+            if (res.success) {
+              wx.showToast({ title: '已解绑', icon: 'success' });
+              self.loadActivityDetail();
+            } else {
+              wx.showToast({ title: res.message || '解绑失败', icon: 'none' });
+            }
+          }).catch(function() {
+            wx.hideLoading();
+            wx.showToast({ title: '解绑失败', icon: 'none' });
+          });
+        }
+      }
+    });
+  },
+
+  // 代报人修改等级
+  showAgentLevelPicker: function(e) {
+    var regId = e.currentTarget.dataset.id;
+    var list = this.data.agentRegistrations || [];
+    var currentLevel = null;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === regId && list[i].level != null) {
+        currentLevel = list[i].level;
+        break;
+      }
+    }
+    if (currentLevel == null && this.data.userRegistration && this.data.userRegistration.level) {
+      currentLevel = this.data.userRegistration.level;
+    }
+    this.setData({ showAgentLevelPicker: true, agentLevelEditId: regId, agentLevelEditValue: currentLevel });
+  },
+
+  hideAgentLevelPicker: function() {
+    this.setData({ showAgentLevelPicker: false });
+  },
+
+  selectAgentEditLevel: function(e) {
+    this.setData({ agentLevelEditValue: parseInt(e.currentTarget.dataset.level) });
+  },
+
+  confirmAgentLevelEdit: function() {
+    var self = this;
+    var regId = self.data.agentLevelEditId;
+    var level = self.data.agentLevelEditValue;
+    if (!regId) return;
+    wx.showLoading({ title: '修改中...' });
+    callFunction('update-registration-level', 'update', {
+      activityId: self.data.activityId,
+      registrationId: regId,
+      level: level
+    }).then(function(res) {
+      wx.hideLoading();
+      if (res && res.success) {
+        wx.showToast({ title: '已修改', icon: 'success' });
+        self.setData({ showAgentLevelPicker: false });
+        self.loadActivityDetail();
+      } else {
+        wx.showToast({ title: res.message || '修改失败', icon: 'none' });
+      }
+    }).catch(function() {
+      wx.hideLoading();
+      wx.showToast({ title: '修改失败', icon: 'none' });
+    });
+  },
+
+  // 取消代报
+  cancelAgentRegistration: function(e) {
+    var self = this;
+    var regId = e.currentTarget.dataset.id;
+    wx.showModal({
+      title: '取消代报',
+      content: '确定取消该代报吗？',
+      success: function(res) {
+        if (res.confirm) {
+          wx.showLoading({ title: '取消中...' });
+          callFunction('cancel-registration', 'cancel', {
+            activityId: self.data.activityId,
+            registrationId: regId
+          }).then(function(res) {
+            wx.hideLoading();
+            if (res.success) {
+              wx.showToast({ title: '已取消', icon: 'success' });
+              self.loadActivityDetail();
+            } else {
+              wx.showToast({ title: res.message || '取消失败', icon: 'none' });
+            }
+          }).catch(function() {
+            wx.hideLoading();
+            wx.showToast({ title: '取消失败', icon: 'none' });
+          });
+        }
+      }
+    });
+  },
+
+  // AI 文案弹窗
+  openAiCopy: function() {
+    var self = this;
+    self.setData({ showAiCopyModal: true, aiCopyLoading: true, aiCopyTab: 'announcement' });
+    callFunction('generate-copy', 'generate', { activityId: self.data.activityId }).then(function(res) {
+      if (res && res.success !== false) {
+        var data = res.data || res;
+        var copy = data.copy || data;
+        self.setData({
+          aiCopyLoading: false,
+          aiCopyAnnouncement: copy.announcement || '',
+          aiCopyShare: copy.share || '',
+          aiCopyInvite: copy.invite || '',
+          aiCopyText: copy.announcement || ''
+        });
+      } else {
+        self.setData({ aiCopyLoading: false });
+        wx.showToast({ title: '生成失败', icon: 'none' });
+      }
+    }).catch(function() {
+      self.setData({ aiCopyLoading: false });
+      wx.showToast({ title: '生成失败', icon: 'none' });
+    });
+  },
+
+  switchCopyTab: function(e) {
+    var tab = e.currentTarget.dataset.tab;
+    var text = '';
+    if (tab === 'announcement') text = this.data.aiCopyAnnouncement;
+    else if (tab === 'share') text = this.data.aiCopyShare;
+    else if (tab === 'invite') text = this.data.aiCopyInvite;
+    this.setData({ aiCopyTab: tab, aiCopyText: text });
+  },
+
+  copyCopyText: function() {
+    var text = this.data.aiCopyText;
+    if (text) {
+      wx.setClipboardData({ data: text, success: function() { wx.showToast({ title: '已复制', icon: 'success' }); } });
+    }
+  },
+
+  regenerateCopy: function() {
+    this.openAiCopy();
+  },
+
+  closeAiCopy: function() {
+    this.setData({ showAiCopyModal: false });
+  },
+
+  // 天气刷新
+  refreshWeather: function() {
+    this.loadWeather();
+  },
+
+  // ===== T9 AI 导航 =====
+  goToGroupingPreview: function() {
+    wx.navigateTo({ url: '/pages/grouping-preview/grouping-preview?activityId=' + this.data.activityId + '' });
+  },
+  goToFillSuggestion: function() {
+    wx.navigateTo({ url: '/pages/fill-suggestion/fill-suggestion?activityId=' + this.data.activityId + '' });
+  },
+  goToCourtAssign: function() {
+    wx.navigateTo({ url: '/pages/court-assign/court-assign?activityId=' + this.data.activityId + '' });
+  },
+  goToAiNotePreview: function() {
+    wx.navigateTo({ url: '/pages/ai-note-preview/ai-note-preview?activityId=' + this.data.activityId + '' });
+  },
+
+  // ===== T10 赛程入口 =====
+  goToSchedule: function() {
+    wx.navigateTo({ url: '/pages/schedule/schedule?activityId=' + this.data.activityId + '' });
+  },
+
+  // ===== T48 语音填分 =====
+  startVoiceInput: function() {
+    var that = this;
+    if (!that.data.voiceConfigured) {
+      wx.showToast({ title: '语音识别未配置', icon: 'none' });
+      return;
+    }
+    that.setData({ voiceRecording: true, voiceRecognizing: false });
+    var recorderManager = wx.getRecorderManager();
+    that._recorderManager = recorderManager;
+    that._recorderManager.onStop(function(res) {
+      if (res.tempFilePath) {
+        that.setData({ voiceRecognizing: true });
+        that.recognizeVoice(res.tempFilePath);
+      }
+    });
+    that._recorderManager.onError(function() {
+      that.setData({ voiceRecording: false });
+      wx.showToast({ title: '录音失败', icon: 'none' });
+    });
+    that._recorderManager.start({ format: 'mp3', sampleRate: 16000, numberOfChannels: 1 });
+  },
+
+  stopVoiceInput: function() {
+    if (this._recorderManager) { this._recorderManager.stop(); }
+    this.setData({ voiceRecording: false });
+  },
+
+  recognizeVoice: function(filePath) {
+    var that = this;
+    wx.cloud.uploadFile({
+      cloudPath: 'voice-temp/' + Date.now() + '.mp3',
+      filePath: filePath,
+      success: function(uploadRes) {
+        callFunction('voice-score-parse', 'recognize', {
+          fileID: uploadRes.fileID,
+          activityId: that.data.activityId
+        }).then(function(data) {
+          // AI-31: callFunction 返回信封 {success,data,message}，result 在 data.data 里
+          var payload = data.data || {};
+          var raw = payload.result || payload.scores || null;
+          // 归一化为面板/提交需要的结构 {matchId, matchOrder, team1Score, team2Score}
+          var voiceResult = null;
+          if (raw && raw.length) {
+            var first = raw[0];
+            voiceResult = {
+              matchId: first.matchId || '',
+              matchOrder: first.matchOrder || 1,
+              team1Score: first.team1Score != null ? first.team1Score : first.scoreA,
+              team2Score: first.team2Score != null ? first.team2Score : first.scoreB
+            };
+          } else if (raw && raw.matchId) {
+            voiceResult = raw;
+          }
+          that.setData({ voiceRecognizing: false, voiceShowPanel: true, voiceResult: voiceResult });
+        }).catch(function() {
+          that.setData({ voiceRecognizing: false });
+          wx.showToast({ title: '识别失败，请手动输入', icon: 'none' });
+        });
+      },
+      fail: function() {
+        that.setData({ voiceRecognizing: false });
+        wx.showToast({ title: '上传失败', icon: 'none' });
+      }
+    });
+  },
+
+  cancelVoiceResult: function() {
+    this.setData({ voiceShowPanel: false, voiceResult: null });
+  },
+
+  confirmVoiceResult: function() {
+    var that = this;
+    var result = that.data.voiceResult;
+    if (!result || that.data.voiceSubmitting) return;
+    that.setData({ voiceSubmitting: true });
+    callFunction('submit-score', 'submit', {
+      matchId: result.matchId,
+      team1Score: result.team1Score,
+      team2Score: result.team2Score
+    }).then(function(res) {
+      // AI-31: 校验 success，避免失败也提示记分成功
+      if (!res || res.success === false) {
+        throw new Error((res && res.message) || '提交失败');
+      }
+      that.setData({ voiceSubmitting: false, voiceShowPanel: false, voiceResult: null });
+      wx.showToast({ title: '记分成功', icon: 'success' });
+      that.loadActivityDetail();
+    }).catch(function() {
+      that.setData({ voiceSubmitting: false });
+      wx.showToast({ title: '提交失败', icon: 'none' });
+    });
+  },
+
+  onGlobalBannerTap: function() {},
+
+  // UX-22: 解析活动时间戳（复用 formatTime 的 iOS 兼容解析）
+  parseActivityTimestamp: function(timeValue) {
+    if (!timeValue && timeValue !== 0) return 0;
+    var timestamp = timeValue;
     if (typeof timeValue === 'number') {
       timestamp = timeValue;
     } else if (typeof timeValue === 'string') {
-      if (timeValue.includes('T')) {
+      if (timeValue.indexOf('T') >= 0) {
         timestamp = new Date(timeValue).getTime();
       } else if (!isNaN(timeValue)) {
         timestamp = parseInt(timeValue);
+      } else if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(timeValue)) {
+        timestamp = new Date(timeValue.replace(/-/g, '/')).getTime();
       } else {
-        return '待定';
+        return 0;
       }
     } else if (typeof timeValue === 'object') {
       if (timeValue.$date) {
         timestamp = timeValue.$date;
       } else {
-        return '待定';
+        return 0;
       }
     }
-    
-    if (!timestamp || isNaN(timestamp)) return '待定';
-    
-    const date = new Date(timestamp);
-    if (isNaN(date.getTime())) return '待定';
-    
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    const hour = date.getHours();
-    const minute = date.getMinutes();
-    return `${month}月${day}日 ${hour}:${String(minute).padStart(2, '0')}`;
+    if (!timestamp || isNaN(timestamp)) return 0;
+    var date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 0;
+    return date.getTime();
   },
 
-  shareActivity: function() {
-    wx.showShareMenu({
-      withShareTicket: true
+  // UX-22: 加入系统日历
+  addCalendar: function() {
+    var activity = this.data.activity || {};
+    var ts = this.parseActivityTimestamp(activity.time);
+    if (!ts) {
+      wx.showToast({ title: '活动时间未确定', icon: 'none' });
+      return;
+    }
+    var startSec = Math.floor(ts / 1000);
+    var endSec = startSec + 2 * 3600;
+    wx.addPhoneCalendar({
+      title: activity.name || '羽毛球活动',
+      startTime: startSec,
+      endTime: endSec,
+      location: activity.location || '',
+      alarm: true,
+      alarmOffset: 3600,
+      success: function() {
+        wx.showToast({ title: '已加入日历', icon: 'success' });
+      },
+      fail: function() {
+        wx.showToast({ title: '加入日历失败', icon: 'none' });
+      }
     });
   },
 
+  formatTime: function(timeValue) {
+    if (!timeValue && timeValue !== 0) return '待定';
+
+    var timestamp = this.parseActivityTimestamp(timeValue);
+    if (!timestamp) return '待定';
+
+    var date = new Date(timestamp);
+    var month = date.getMonth() + 1;
+    var day = date.getDate();
+    var hour = date.getHours();
+    var minute = date.getMinutes();
+    return month + '月' + day + '日 ' + hour + ':' + String(minute).padStart(2, '0');
+  },
+
+  onShareAppMessage: function() {
+    var a = this.data.activity || {};
+    var left = Math.max((a.maxPlayers || 0) - (a.currentPlayers || 0), 0);
+    var t = (a.name || '羽毛球活动') + '｜' + (a.formattedTime || a.time || '') + ' 还剩' + left + '个名额';
+    return { title: t.slice(0, 32), path: '/pages/activity-detail/activity-detail?id=' + this.data.activityId };
+  },
+
+  onShareTimeline: function() {
+    var a = this.data.activity || {};
+    var left = Math.max((a.maxPlayers || 0) - (a.currentPlayers || 0), 0);
+    var t = (a.name || '羽毛球活动') + '｜' + (a.formattedTime || a.time || '') + ' 还剩' + left + '个名额';
+    return {
+      title: t.slice(0, 32),
+      query: 'id=' + (this.data.activityId || '')
+    };
+  },
+
   deleteActivity: function() {
-    const activityId = this.data.activityId;
+    var self = this;
+    var activityId = self.data.activityId;
     
     wx.showModal({
       title: '确认删除',
       content: '确定要删除此活动吗？此操作不可恢复。',
-      success: res => {
+      success: function(res) {
         if (res.confirm) {
           wx.showLoading({ title: '删除中...' });
-          wx.cloud.callFunction({
-            name: 'delete-activity',
-            data: {
-              activityId: activityId
-            },
-            success: res => {
-              wx.hideLoading();
-              if (res.result && res.result.success) {
-                wx.showToast({
-                  title: '删除成功',
-                  icon: 'success'
-                });
-                setTimeout(() => {
-                  wx.navigateBack();
-                }, 1500);
-              } else {
-                wx.showToast({
-                  title: res.result?.error || '删除失败',
-                  icon: 'none'
-                });
-              }
-            },
-            fail: err => {
-              wx.hideLoading();
-              console.error('删除云函数调用失败:', err);
-              wx.showToast({
-                title: '删除失败: ' + (err.errMsg || '未知错误'),
-                icon: 'none',
-                duration: 3000
-              });
+          callFunction('delete-activity', 'delete', { activityId: activityId }).then(function(res) {
+            wx.hideLoading();
+            if (res.success) {
+              wx.showToast({ title: '删除成功', icon: 'success' });
+              setTimeout(function() { wx.navigateBack(); }, 1500);
+            } else {
+              wx.showToast({ title: res.message || '删除失败', icon: 'none' });
             }
+          }).catch(function(err) {
+            wx.hideLoading();
+            console.error('删除云函数调用失败:', err);
+            wx.showToast({ title: '删除失败', icon: 'none', duration: 3000 });
           });
         }
       }
@@ -716,42 +1159,26 @@ Page({
   },
 
   finishActivity: function() {
-    const activityId = this.data.activityId;
+    var self = this;
+    var activityId = self.data.activityId;
     
     wx.showModal({
       title: '结束活动',
       content: '确定要结束此活动吗？结束后可查看排名',
-      success: res => {
+      success: function(res) {
         if (res.confirm) {
           wx.showLoading({ title: '结束中...' });
-          wx.cloud.callFunction({
-            name: 'update-activity-status',
-            data: {
-              activityId: activityId,
-              status: 'finished'
-            },
-            success: res => {
-              wx.hideLoading();
-              if (res.result && res.result.success) {
-                wx.showToast({
-                  title: '活动已结束',
-                  icon: 'success'
-                });
-                this.loadActivityDetail();
-              } else {
-                wx.showToast({
-                  title: res.result?.error || '操作失败',
-                  icon: 'none'
-                });
-              }
-            },
-            fail: err => {
-              wx.hideLoading();
-              wx.showToast({
-                title: '操作失败',
-                icon: 'none'
-              });
+          callFunction('update-activity-status', 'update', { activityId: activityId, status: 'finished' }).then(function(res) {
+            wx.hideLoading();
+            if (res.success) {
+              wx.showToast({ title: '活动已结束', icon: 'success' });
+              self.loadActivityDetail();
+            } else {
+              wx.showToast({ title: res.message || '操作失败', icon: 'none' });
             }
+          }).catch(function() {
+            wx.hideLoading();
+            wx.showToast({ title: '操作失败', icon: 'none' });
           });
         }
       }
@@ -759,69 +1186,25 @@ Page({
   },
 
   cancelRegistration: function() {
-    const activity = this.data.activity;
-    const reg = this.data.userRegistration;
+    var self = this;
     
     wx.showModal({
       title: '确认取消报名',
       content: '取消报名需要组织者确认后才会生效，确定要申请取消吗？',
-      success: res => {
+      success: function(res) {
         if (res.confirm) {
           wx.showLoading({ title: '提交中...' });
-          wx.cloud.callFunction({
-            name: 'cancel-registration',
-            data: {
-              activityId: this.data.activityId
-            },
-            success: res => {
-              wx.hideLoading();
-              if (res.result && res.result.success) {
-                wx.showToast({ title: '已提交取消申请', icon: 'success' });
-                this.loadActivityDetail();
-              } else {
-                wx.showToast({ title: res.result?.error || '操作失败', icon: 'none' });
-              }
-            },
-            fail: err => {
-              wx.hideLoading();
-              wx.showToast({ title: '操作失败', icon: 'none' });
+          callFunction('cancel-registration', 'cancel', { activityId: self.data.activityId }).then(function(res) {
+            wx.hideLoading();
+            if (res.success) {
+              wx.showToast({ title: '已提交取消申请', icon: 'success' });
+              self.loadActivityDetail();
+            } else {
+              wx.showToast({ title: res.message || '操作失败', icon: 'none' });
             }
-          });
-        }
-      }
-    });
-  },
-
-  handleCancel: function(e) {
-    const registrationId = e.currentTarget.dataset.id;
-    const action = e.currentTarget.dataset.action;
-    const actionText = action === 'approve' ? '同意' : '拒绝';
-
-    wx.showModal({
-      title: `${actionText}取消报名`,
-      content: `确定${actionText}该用户的取消报名请求吗？`,
-      success: res => {
-        if (res.confirm) {
-          wx.showLoading({ title: '处理中...' });
-          wx.cloud.callFunction({
-            name: 'handle-cancel-request',
-            data: {
-              registrationId: registrationId,
-              action: action
-            },
-            success: res => {
-              wx.hideLoading();
-              if (res.result && res.result.success) {
-                wx.showToast({ title: res.result.message || '处理成功', icon: 'success' });
-                this.loadActivityDetail();
-              } else {
-                wx.showToast({ title: res.result?.error || '操作失败', icon: 'none' });
-              }
-            },
-            fail: err => {
-              wx.hideLoading();
-              wx.showToast({ title: '操作失败', icon: 'none' });
-            }
+          }).catch(function() {
+            wx.hideLoading();
+            wx.showToast({ title: '操作失败', icon: 'none' });
           });
         }
       }
@@ -829,8 +1212,8 @@ Page({
   },
 
   onRegItemTap: function(e) {
-    const item = e.currentTarget.dataset.item;
-    if (!item || item.cancel_status !== 'pending' || !this.data.isOrganizer) return;
+    var item = e.currentTarget.dataset.item;
+    if (!item || item.cancelStatus !== 'pending' || !this.data.isOrganizer) return;
 
     this.setData({
       showCancelModal: true,
@@ -843,37 +1226,30 @@ Page({
   },
 
   handleCancelFromModal: function(e) {
-    const action = e.currentTarget.dataset.action;
-    const item = this.data.cancelModalItem;
+    var self = this;
+    var action = e.currentTarget.dataset.action;
+    var item = self.data.cancelModalItem;
     if (!item) return;
 
-    this.setData({ showCancelModal: false, cancelModalItem: null });
+    self.setData({ showCancelModal: false, cancelModalItem: null });
 
     wx.showLoading({ title: '处理中...' });
-    wx.cloud.callFunction({
-      name: 'handle-cancel-request',
-      data: {
-        registrationId: item._id,
-        action: action
-      },
-      success: res => {
-        wx.hideLoading();
-        if (res.result && res.result.success) {
-          wx.showToast({ title: res.result.message || '处理成功', icon: 'success' });
-          this.loadActivityDetail();
-        } else {
-          wx.showToast({ title: res.result?.error || '操作失败', icon: 'none' });
-        }
-      },
-      fail: err => {
-        wx.hideLoading();
-        wx.showToast({ title: '操作失败', icon: 'none' });
+    callFunction('handle-cancel-request', 'approve', { registrationId: item.id, decision: action }).then(function(res) {
+      wx.hideLoading();
+      if (res.success) {
+        wx.showToast({ title: res.message || '处理成功', icon: 'success' });
+        self.loadActivityDetail();
+      } else {
+        wx.showToast({ title: res.message || '操作失败', icon: 'none' });
       }
+    }).catch(function() {
+      wx.hideLoading();
+      wx.showToast({ title: '操作失败', icon: 'none' });
     });
   },
 
   copyLocation: function(e) {
-    const activity = this.data.activity;
+    var activity = this.data.activity;
     if (activity && activity.latitude && activity.longitude) {
       wx.openLocation({
         latitude: activity.latitude,
@@ -883,11 +1259,11 @@ Page({
         scale: 18
       });
     } else {
-      const location = e.currentTarget.dataset.location;
+      var location = e.currentTarget.dataset.location;
       if (location) {
         wx.setClipboardData({
           data: location,
-          success: () => {
+          success: function() {
             wx.showToast({
               title: '地点已复制',
               icon: 'success'
@@ -896,5 +1272,10 @@ Page({
         });
       }
     }
+  },
+
+  // UX-16: 图片加载失败简单处理
+  onImgError: function(e) {
+    console.warn('图片加载失败', e && e.detail);
   }
 });

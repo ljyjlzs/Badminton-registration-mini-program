@@ -1,3 +1,4 @@
+<wxs src="../../utils/pct.wxs" module="pct" />
 <view class="home-page">
   <view wx:if="{{!isLoggedIn && !loading}}" class="login-shell">
     <view class="login-bg">
@@ -51,9 +52,11 @@
                 wx:if="{{userInfo.avatar}}"
                 class="user-avatar"
                 src="{{userInfo.avatar}}"
-                mode="aspectFill"></image>
+                mode="aspectFill"
+                lazy-load
+                binderror="onImgError"></image>
               <view wx:else class="user-avatar avatar-placeholder">
-                <text>{{userInfo && (userInfo.nickname || userInfo.name) ? (userInfo.nickname[0] || userInfo.name[0]) : '?'}}</text>
+                <text>{{userInfo.nickname ? userInfo.nickname[0] : userInfo.name ? userInfo.name[0] : '?'}}</text>
               </view>
             </button>
           </view>
@@ -71,15 +74,15 @@
       <view class="hero-stats">
         <view class="hero-stat">
           <text class="stat-label">我创建的</text>
-          <text class="stat-value">{{myActivities.length}}</text>
+          <text class="stat-value">{{myActivitiesTotal}}</text>
         </view>
         <view class="hero-stat">
           <text class="stat-label">可参加</text>
-          <text class="stat-value">{{joinableActivities.length}}</text>
+          <text class="stat-value">{{joinableActivitiesTotal}}</text>
         </view>
         <view class="hero-stat">
           <text class="stat-label">进行中</text>
-          <text class="stat-value">{{unavailableActivities.length}}</text>
+          <text class="stat-value">{{unavailableActivitiesTotal}}</text>
         </view>
       </view>
 
@@ -87,6 +90,31 @@
         <text class="announcement-icon">📢</text>
         <text class="announcement-text">查看比赛规则和积分说明</text>
         <text class="announcement-arrow">›</text>
+      </view>
+
+      <view wx:if="{{userStats}}" class="user-stats-card">
+        <view class="stats-title">我的战绩</view>
+        <view class="stats-grid">
+          <view class="stat-item">
+            <text class="stat-num">{{userStats.totalGames || 0}}</text>
+            <text class="stat-label">场次</text>
+          </view>
+          <view class="stat-item">
+            <text class="stat-num">{{userStats.totalWins || 0}}</text>
+            <text class="stat-label">胜场</text>
+          </view>
+          <view class="stat-item">
+            <text class="stat-num">{{userStats.winRate || '0%'}}</text>
+            <text class="stat-label">胜率</text>
+          </view>
+          <view class="stat-item">
+            <text class="stat-num">{{userStats.totalScore || 0}}</text>
+            <text class="stat-label">总积分</text>
+          </view>
+        </view>
+        <view wx:if="{{userBadges.length > 0}}" class="badge-row">
+          <view wx:for="{{userBadges}}" wx:key="id" class="badge-chip">{{item.icon}} {{item.name}}</view>
+        </view>
       </view>
     </view>
 
@@ -108,7 +136,7 @@
       <view class="section-header">
         <view>
           <text class="section-title">我创建的活动</text>
-          <text class="section-caption">你负责组织和推进的比赛</text>
+          <text class="section-caption">你负责组织和推进的比赛 · 只显示最近 3 场</text>
         </view>
         <text class="section-more" bindtap="goToActivityList" data-tab="created">查看全部</text>
       </view>
@@ -122,25 +150,23 @@
       <view wx:else class="activity-stack">
         <view
           wx:for="{{myActivities}}"
-          wx:key="_id"
+          wx:key="id"
           class="activity-card"
           bindtap="goToActivityDetail"
-          data-id="{{item._id}}">
+          data-id="{{item.id}}">
           <view class="activity-card-top">
             <text class="activity-name">{{item.name}}</text>
             <view class="status-badge status-{{item.status}}">
               <text wx:if="{{item.status === 'registering'}}">报名中</text>
               <text wx:elif="{{item.status === 'grouping'}}">分组中</text>
               <text wx:elif="{{item.status === 'playing'}}">比赛中</text>
-              <text wx:elif="{{item.status === 'challenge'}}">挑战赛</text>
-              <text wx:elif="{{item.status === 'final'}}">决赛</text>
               <text wx:elif="{{item.status === 'finished'}}">已结束</text>
               <text wx:else>{{item.status}}</text>
             </view>
           </view>
           <view class="activity-meta-row">
             <text class="meta-pill">📍 {{item.location}}</text>
-            <text class="meta-pill">👥 {{item.current_players || 0}} / {{item.max_players}}</text>
+            <text class="meta-pill">👥 {{item.currentPlayers || 0}} / {{item.maxPlayers}}</text>
           </view>
         </view>
       </view>
@@ -150,7 +176,7 @@
       <view class="section-header">
         <view>
           <text class="section-title">可参加的活动</text>
-          <text class="section-caption">正在开放报名，适合直接加入</text>
+          <text class="section-caption">正在开放报名，适合直接加入 · 只显示最近 3 场</text>
         </view>
         <text class="section-more" bindtap="goToActivityList" data-tab="search">去挑一场</text>
       </view>
@@ -164,21 +190,21 @@
       <view wx:else class="activity-stack">
         <view
           wx:for="{{joinableActivities}}"
-          wx:key="_id"
+          wx:key="id"
           class="activity-card"
           bindtap="goToActivityDetail"
-          data-id="{{item._id}}">
+          data-id="{{item.id}}">
           <view class="activity-card-top">
             <text class="activity-name">{{item.name}}</text>
             <view class="status-badge status-registering">报名中</view>
           </view>
           <view class="activity-meta-row">
             <text class="meta-pill">📍 {{item.location}}</text>
-            <text class="meta-pill">👥 {{item.current_players || 0}} / {{item.max_players}}</text>
+            <text class="meta-pill">👥 {{item.currentPlayers || 0}} / {{item.maxPlayers}}</text>
           </view>
           <view class="activity-progress-row">
             <progress
-              percent="{{(item.current_players / item.max_players) * 100}}"
+              percent="{{pct.pct(item.currentPlayers, item.maxPlayers)}}"
               stroke-width="8"
               active
               activeColor="#0ea56b"
@@ -192,7 +218,7 @@
       <view class="section-header">
         <view>
           <text class="section-title">暂时不能参加</text>
-          <text class="section-caption">这些活动已经开始或进入后续阶段</text>
+          <text class="section-caption">这些活动已经开始或进入后续阶段 · 只显示最近 3 场</text>
         </view>
       </view>
 
@@ -205,24 +231,22 @@
       <view wx:else class="activity-stack">
         <view
           wx:for="{{unavailableActivities}}"
-          wx:key="_id"
+          wx:key="id"
           class="activity-card disabled"
           bindtap="goToActivityDetail"
-          data-id="{{item._id}}">
+          data-id="{{item.id}}">
           <view class="activity-card-top">
             <text class="activity-name">{{item.name}}</text>
             <view class="status-badge status-{{item.status}}">
               <text wx:if="{{item.status === 'grouping'}}">分组中</text>
               <text wx:elif="{{item.status === 'playing'}}">比赛中</text>
-              <text wx:elif="{{item.status === 'challenge'}}">挑战赛</text>
-              <text wx:elif="{{item.status === 'final'}}">决赛</text>
               <text wx:elif="{{item.status === 'finished'}}">已结束</text>
               <text wx:else>{{item.status}}</text>
             </view>
           </view>
           <view class="activity-meta-row">
             <text class="meta-pill">📍 {{item.location}}</text>
-            <text class="meta-pill">👥 {{item.current_players || 0}} / {{item.max_players}}</text>
+            <text class="meta-pill">👥 {{item.currentPlayers || 0}} / {{item.maxPlayers}}</text>
           </view>
         </view>
       </view>

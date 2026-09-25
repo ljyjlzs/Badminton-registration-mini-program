@@ -1,14 +1,27 @@
 // 活动列表页面
 const app = getApp();
+const { callFunction } = require('../../utils/request.js');
+const shareUtil = require('../../utils/share.js');
 
 // 活动类型中文映射
 const TYPE_MAP = {
   'singles': '单打',
   'doubles': '双打轮换',
-  'fixed-doubles': '双打固搭'
+  'fixed-doubles': '双打固搭',
+  'court-doubles': '按场地双打'
 };
 
 Page({
+  onShareAppMessage: function() {
+    var s = shareUtil.makeShare({ title: '羽毛球活动列表', path: '/pages/activity-list/activity-list' });
+    return { title: s.title, path: s.path };
+  },
+
+  onShareTimeline: function() {
+    var s = shareUtil.makeShare({ title: '羽毛球活动列表', path: '/pages/activity-list/activity-list' });
+    return { title: s.title, query: s.timeline.query };
+  },
+
   data: {
     myCreatedActivities: [],
     myJoinedActivities: [],
@@ -20,27 +33,37 @@ Page({
     currentTab: 'created',
     loading: true,
     searchLoading: false,
+    loadError: false,
+    availablePage: 1,
+    availableHasMore: false,
+    availableLoadingMore: false,
+    searchPage: 1,
+    searchHasMore: false,
+    filterDateStart: '',
+    filterDateEnd: '',
+    filterType: '',
     statusText: {
       'registering': '报名中',
       'grouping': '分组中',
       'playing': '比赛中',
-      'challenge': '挑战赛',
-      'final': '决赛',
       'finished': '已结束'
     }
   },
 
   onLoad: function(options) {
+    // PERF-21: onShow 节流状态
+    this._firstShowDone = false;
+    this._lastLoadAt = 0;
     // tabBar 页面不支持 url 参数，通过 globalData 传递
-    const app = getApp();
-    const targetTab = app.globalData.activityListTab || 'created';
-    this.setData({ currentTab: targetTab });
     if (app.globalData.isLoggedIn) {
       this.loadActivities();
     }
   },
 
   onShow: function() {
+    // 每次显示时读取目标 tab（全局跳转可能随时切换）
+    const targetTab = app.globalData.activityListTab || 'created';
+    this.setData({ currentTab: targetTab });
     // 授权拦截：未登录则跳回首页
     if (!app.globalData.isLoggedIn) {
       wx.showModal({
@@ -53,7 +76,18 @@ Page({
       });
       return;
     }
-    // 每次显示时刷新数据
+    // PERF-21: 首次 onShow 照常加载（onLoad 已加载过则跳过，避免双跑）
+    if (!this._firstShowDone) {
+      this._firstShowDone = true;
+      if (this._lastLoadAt) return;
+      this.loadActivities();
+      return;
+    }
+    // PERF-21: 60 秒内重复进入且已有数据，不全量刷新
+    const hasData = (this.data.myCreatedActivities || []).length > 0 ||
+      (this.data.myJoinedActivities || []).length > 0 ||
+      (this.data.availableActivities || []).length > 0;
+    if (hasData && Date.now() - this._lastLoadAt < 60000) return;
     this.loadActivities();
   },
 
@@ -63,57 +97,68 @@ Page({
   },
 
   loadActivities: function() {
-    this.setData({ loading: true });
-    
+    this._lastLoadAt = Date.now();
+    this.setData({ loading: true, loadError: false });
+
     // 加载我创建的活动
-    wx.cloud.callFunction({
-      name: 'get-activities',
-      data: { type: 'organized' },
-      success: res => {
-        if (res.result.success) {
-          const list = res.result.data || [];
-          this.setData({ myCreatedActivities: list });
-          this.applyFilter();
-        }
+    callFunction('get-activities', 'list', { type: 'organized', page: 1, pageSize: 20 }).then(res => {
+      if (res.success) {
+        this.setData({ myCreatedActivities: this.withFormattedTime((res.data && res.data.list) || []) });
+        this.applyFilter();
       }
+    }).catch(() => {
+      this.setData({ loadError: true });
     });
-    
+
     // 加载我参加的活动
-    wx.cloud.callFunction({
-      name: 'get-activities',
-      data: { type: 'joined' },
-      success: res => {
-        this.setData({ loading: false });
-        if (res.result.success) {
-          const list = res.result.data || [];
-          this.setData({ myJoinedActivities: list });
-          this.applyFilter();
-        }
-      },
-      fail: () => {
-        this.setData({ loading: false });
+    callFunction('get-activities', 'list', { type: 'joined', page: 1, pageSize: 20 }).then(res => {
+      this.setData({ loading: false });
+      if (res.success) {
+        var self = this;
+        var joined = this.withFormattedTime((res.data && res.data.list) || []).map(function(item) {
+          var ts = self.parseTime(item.time);
+          var daysLeft = 0;
+          if (ts) {
+            // 自然日差：今日 0 点对齐，避免用毫秒 ceil 把今天算成 1 天
+            var startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
+            var startOfEvent = new Date(ts);
+            startOfEvent.setHours(0, 0, 0, 0);
+            daysLeft = Math.round((startOfEvent - startOfToday) / 86400000);
+          }
+          return Object.assign({}, item, { daysLeft: daysLeft });
+        });
+        this.setData({ myJoinedActivities: joined });
+        this.applyFilter();
       }
+    }).catch(() => {
+      this.setData({ loading: false, loadError: true });
     });
 
     // 加载可参加的活动（用于查找活动tab）
-    wx.cloud.callFunction({
-      name: 'get-activities',
-      data: { type: 'available' },
-      success: res => {
-        if (res.result && res.result.success) {
-          this.setData({ availableActivities: res.result.data || [] });
-          // 如果当前在搜索tab且没有关键词，用可参加活动作为搜索结果
-          if (this.data.currentTab === 'search' && !this.data.searchKeyword) {
-            this.setData({ searchResults: res.result.data || [] });
-          }
+    callFunction('get-activities', 'list', { type: 'available', page: 1, pageSize: 20 }).then(res => {
+      if (res.success) {
+        var available = this.withFormattedTime((res.data && res.data.list) || []);
+        this.setData({ availableActivities: available, availableHasMore: (res.data && res.data.hasMore) || false, availablePage: 1 });
+        if (this.data.currentTab === 'search' && !this.data.searchKeyword) {
+          this.setData({ searchResults: available });
         }
       }
+    }).catch(() => {
+      this.setData({ loadError: true });
     });
 
     // 如果在搜索tab，重新搜索
     if (this.data.currentTab === 'search' && this.data.searchKeyword) {
       this.doCloudSearch();
     }
+  },
+
+  withFormattedTime: function(list) {
+    var self = this;
+    return (list || []).map(function(item) {
+      return Object.assign({}, item, { formattedTime: self.formatTime(item.time) });
+    });
   },
 
   switchTab: function(e) {
@@ -155,24 +200,52 @@ Page({
     }
   },
 
-  // 本地过滤（我创建的 / 我参加的）
+  onDateStartChange: function(e) {
+    this.setData({ filterDateStart: e.detail.value });
+    this.applyFilter();
+  },
+
+  onDateEndChange: function(e) {
+    this.setData({ filterDateEnd: e.detail.value });
+    this.applyFilter();
+  },
+
+  onFilterTypeChange: function(e) {
+    const type = e.currentTarget.dataset.type;
+    this.setData({ filterType: this.data.filterType === type ? '' : type });
+    this.applyFilter();
+  },
+
+  clearFilter: function() {
+    this.setData({ filterDateStart: '', filterDateEnd: '', filterType: '' });
+    this.applyFilter();
+  },
+
   applyFilter: function() {
     const kw = (this.data.searchKeyword || '').trim().toLowerCase();
-
-    if (!kw) {
-      this.setData({
-        filteredCreatedActivities: this.data.myCreatedActivities,
-        filteredJoinedActivities: this.data.myJoinedActivities
-      });
-      return;
-    }
+    const { filterDateStart, filterDateEnd, filterType } = this.data;
 
     const filterFn = (item) => {
-      const nameMatch = item.name && item.name.toLowerCase().includes(kw);
-      const locationMatch = item.location && item.location.toLowerCase().includes(kw);
-      const typeCn = TYPE_MAP[item.type] || '';
-      const typeMatch = typeCn.includes(kw) || (item.type && item.type.toLowerCase().includes(kw));
-      return nameMatch || locationMatch || typeMatch;
+      if (kw) {
+        const nameMatch = item.name && item.name.toLowerCase().includes(kw);
+        const locationMatch = item.location && item.location.toLowerCase().includes(kw);
+        const typeCn = TYPE_MAP[item.type] || '';
+        const typeMatch = typeCn.includes(kw) || (item.type && item.type.toLowerCase().includes(kw));
+        if (!nameMatch && !locationMatch && !typeMatch) return false;
+      }
+      if (filterType && item.type !== filterType) return false;
+      if (filterDateStart || filterDateEnd) {
+        const itemTime = item.time ? new Date(item.time).getTime() : 0;
+        if (filterDateStart) {
+          const start = new Date(filterDateStart).getTime();
+          if (itemTime < start) return false;
+        }
+        if (filterDateEnd) {
+          const end = new Date(filterDateEnd).getTime() + 86400000;
+          if (itemTime > end) return false;
+        }
+      }
+      return true;
     };
 
     this.setData({
@@ -191,27 +264,17 @@ Page({
 
     this.setData({ searchLoading: true });
 
-    wx.cloud.callFunction({
-      name: 'get-activities',
-      data: {
-        type: 'search',
-        keyword: keyword
-      },
-      success: res => {
-        this.setData({ searchLoading: false });
-        if (res.result && res.result.success) {
-          this.setData({
-            searchResults: res.result.data || []
-          });
-        } else {
-          this.setData({ searchResults: [] });
-        }
-      },
-      fail: err => {
-        console.error('[搜索] 失败:', err);
-        this.setData({ searchLoading: false });
-        wx.showToast({ title: '搜索失败', icon: 'none' });
-      }
+    callFunction('get-activities', 'list', { type: 'search', keyword, page: 1, pageSize: 20 }).then(res => {
+      this.setData({ searchLoading: false });
+      const list = this.withFormattedTime(res.success ? ((res.data && res.data.list) || []) : []);
+      this.setData({
+        searchResults: list,
+        searchPage: 1,
+        searchHasMore: (res.data && res.data.hasMore) || false
+      });
+    }).catch(() => {
+      this.setData({ searchLoading: false });
+      wx.showToast({ title: '搜索失败', icon: 'none' });
     });
   },
 
@@ -219,8 +282,50 @@ Page({
     this.setData({
       searchKeyword: '',
       searchResults: this.data.availableActivities,
+      searchHasMore: this.data.availableHasMore,
+      searchPage: this.data.availablePage,
       filteredCreatedActivities: this.data.myCreatedActivities,
       filteredJoinedActivities: this.data.myJoinedActivities
+    });
+  },
+
+  // BUG-6/UX-25: 触底加载更多（仅搜索/可参加 tab）
+  onReachBottom: function() {
+    if (this.data.currentTab !== 'search') return;
+    if (this.data.searchLoading || this.data.availableLoadingMore) return;
+
+    const isSearch = !!(this.data.searchKeyword || '').trim();
+    const hasMore = isSearch ? this.data.searchHasMore : this.data.availableHasMore;
+    if (!hasMore) return;
+
+    const nextPage = (isSearch ? this.data.searchPage : this.data.availablePage) + 1;
+    const keyword = (this.data.searchKeyword || '').trim();
+
+    this.setData({ availableLoadingMore: true });
+    const payload = isSearch
+      ? { type: 'search', keyword, page: nextPage, pageSize: 20 }
+      : { type: 'available', page: nextPage, pageSize: 20 };
+
+    callFunction('get-activities', 'list', payload).then(res => {
+      const more = this.withFormattedTime((res.success && res.data && res.data.list) || []);
+      const hasMoreAfter = (res.data && res.data.hasMore) || false;
+      const existing = isSearch ? this.data.searchResults : this.data.availableActivities;
+      const merged = existing.concat(more);
+      const patch = { availableLoadingMore: false };
+      if (isSearch) {
+        patch.searchResults = merged;
+        patch.searchPage = nextPage;
+        patch.searchHasMore = hasMoreAfter;
+      } else {
+        patch.availableActivities = merged;
+        patch.availablePage = nextPage;
+        patch.availableHasMore = hasMoreAfter;
+        patch.searchResults = merged;
+      }
+      this.setData(patch);
+    }).catch(() => {
+      this.setData({ availableLoadingMore: false });
+      wx.showToast({ title: '加载失败', icon: 'none' });
     });
   },
 
@@ -237,32 +342,40 @@ Page({
     });
   },
 
-  formatTime: function(timeValue) {
-    if (!timeValue) return '待定';
-    
+  parseTime: function(timeValue) {
+    if (!timeValue && timeValue !== 0) return null;
+
     let timestamp = timeValue;
-    
+
     if (typeof timeValue === 'string') {
       if (timeValue.includes('T')) {
         timestamp = new Date(timeValue).getTime();
       } else if (!isNaN(timeValue)) {
         timestamp = parseInt(timeValue);
+      } else if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(timeValue)) {
+        timestamp = new Date(timeValue.replace(/-/g, '/')).getTime();
       } else {
-        return '待定';
+        return null;
       }
     } else if (typeof timeValue === 'object') {
       if (timeValue.$date) {
         timestamp = timeValue.$date;
       } else {
-        return '待定';
+        return null;
       }
     }
-    
-    if (!timestamp || isNaN(timestamp)) return '待定';
-    
+
+    if (!timestamp || isNaN(timestamp)) return null;
+    return timestamp;
+  },
+
+  formatTime: function(timeValue) {
+    var timestamp = this.parseTime(timeValue);
+    if (!timestamp) return '待定';
+
     const date = new Date(timestamp);
     if (isNaN(date.getTime())) return '待定';
-    
+
     const month = date.getMonth() + 1;
     const day = date.getDate();
     const hour = date.getHours();

@@ -1,0 +1,43 @@
+<view class="weather-page">
+  <view wx:if="{{loading}}" class="weather-loading">
+    <text style="color:#8d9a95">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <view class="weather-card" wx:if="{{weather}}">
+      <view class="weather-city">{{weather.city}}</view>
+      <view class="weather-temp">{{weather.daytemp}}℃</view>
+      <view class="weather-text">{{weather.dayweather}} / {{weather.nightweather}}</view>
+      <view class="weather-wind">{{weather.daywind}}风 {{weather.daypower}}级</view>
+      <view class="weather-date">{{weather.date}}</view>
+    </view>
+
+    <view class="detail-section" wx:if="{{weather}}">
+      <text class="section-title">详细信息</text>
+      <view class="setting-row">
+        <text class="setting-label">白天天气</text>
+        <text class="setting-value">{{weather.dayweather}}</text>
+      </view>
+      <view class="setting-row">
+        <text class="setting-label">夜间天气</text>
+        <text class="setting-value">{{weather.nightweather}}</text>
+      </view>
+      <view class="setting-row">
+        <text class="setting-label">最高温度</text>
+        <text class="setting-value">{{weather.daytemp}}℃</text>
+      </view>
+      <view class="setting-row">
+        <text class="setting-label">最低温度</text>
+        <text class="setting-value">{{weather.nighttemp}}℃</text>
+      </view>
+      <view class="setting-row">
+        <text class="setting-label">风力</text>
+        <text class="setting-value">{{weather.daywind}} {{weather.daypower}}级</text>
+      </view>
+    </view>
+
+    <view wx:if="{{!weather}}" class="empty-tip">暂无天气数据</view>
+
+    <button class="btn-refresh" bindtap="onRefresh">刷新</button>
+  </block>
+</view>

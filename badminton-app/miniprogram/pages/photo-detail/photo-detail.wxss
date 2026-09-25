@@ -1,0 +1,20 @@
+.photo-detail-page { padding: 24rpx; min-height: 100vh; padding-bottom: 140rpx; }
+.photo-main { border-radius: 24rpx; overflow: hidden; margin-bottom: 24rpx; }
+.photo-main image { width: 100%; display: block; }
+.photo-actions { display: flex; gap: 24rpx; align-items: center; margin-bottom: 24rpx; }
+.action-btn { display: flex; align-items: center; gap: 8rpx; padding: 12rpx 24rpx; border-radius: 999rpx; background: rgba(244,247,246,0.96); font-size: 26rpx; color: #4a5e56; border: none; }
+.action-btn.liked { background: rgba(231,247,239,0.96); color: #0ea56b; }
+.detail-section { background: rgba(255,255,255,0.96); padding: 30rpx 26rpx; border-radius: 30rpx; margin-bottom: 24rpx; border: 1rpx solid rgba(18,69,51,0.06); }
+.section-title { display: block; font-size: 32rpx; font-weight: 700; color: #12332b; margin-bottom: 20rpx; }
+.comment-item { padding: 20rpx 0; border-bottom: 1rpx solid rgba(18,69,51,0.06); }
+.comment-item:last-child { border-bottom: none; }
+.comment-header { display: flex; justify-content: space-between; align-items: center; }
+.comment-user { font-size: 26rpx; font-weight: 600; color: #12332b; }
+.comment-time { font-size: 22rpx; color: #8d9a95; }
+.comment-content { font-size: 26rpx; color: #12332b; margin-top: 8rpx; line-height: 1.6; }
+.comment-delete { font-size: 22rpx; color: #d64545; padding: 4rpx 12rpx; border-radius: 999rpx; background: rgba(255,245,245,0.98); border: none; }
+.comment-input-bar { position: fixed; bottom: 0; left: 0; right: 0; display: flex; gap: 12rpx; padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom)); background: rgba(255,255,255,0.98); border-top: 1rpx solid rgba(18,69,51,0.06); }
+.comment-input { flex: 1; height: 72rpx; border: 2rpx solid rgba(18,69,51,0.12); border-radius: 999rpx; padding: 0 24rpx; font-size: 26rpx; }
+.comment-send { width: 120rpx; height: 72rpx; line-height: 72rpx; text-align: center; border-radius: 999rpx; font-size: 28rpx; font-weight: 700; background: linear-gradient(135deg,#0ea56b 0%,#0bc278 100%); color: #fff; border: none; }
+.comment-send:disabled { opacity: 0.5; }
+.empty-tip { padding: 32rpx; text-align: center; font-size: 26rpx; color: #8d9a95; }

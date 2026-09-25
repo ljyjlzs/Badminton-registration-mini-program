@@ -1,266 +1,264 @@
-/**
- * joinActivity 云函数 - 报名参加活动
- *
- * 功能：
- * 1. 验证活动状态（必须是 registering）
- * 2. 验证人数是否已满
- * 3. 验证是否已报名
- * 4. 创建报名记录
- *
- * 入参：{ activityId, level, nickname, avatar, partnerId, activityName }
- *   - activityId: 活动的 _id（优先使用）
- *   - activityName: 活动名称（当 activityId 为空时，按名称精确查找）
- * 出参：{ success, data: { registrationId } }
- */
+var cloud = require('wx-server-sdk');
+var logger = require('./logger');
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
+var db = cloud.database();
+var _ = db.command;
 
-const cloud = require('wx-server-sdk');
-
-cloud.init({
-  env: cloud.DYNAMIC_CURRENT_ENV
-});
-
-const db = cloud.database();
-const _ = db.command;
-
-exports.main = async (event, context) => {
-  const wxContext = cloud.getWXContext();
-  const openid = wxContext.OPENID;
-
-  const { activityId, level, nickname, avatar, partnerId, activityName } = event;
-
-  if (!avatar) {
-    return {
-      success: false,
-      error: '请上传头像'
-    };
-  }
-
-  if (!nickname || nickname.trim().length < 2) {
-    return {
-      success: false,
-      error: '请输入有效的名字（至少2个字符）'
-    };
-  }
-
-  if (!level || level < 1 || level > 10) {
-    return {
-      success: false,
-      error: '等级必须在1-10之间'
-    };
-  }
-
-  // 解析真实活动ID：优先用 activityId，否则按 activityName 查找
-  let realActivityId = activityId;
-
-  if (!realActivityId && activityName && activityName.trim()) {
-    // AI 可能传了活动名称，先精确匹配，再模糊匹配
-    try {
-      // 1. 先尝试精确匹配
-      const exactResult = await db.collection('activities')
-        .where({
-          name: activityName.trim(),
-          status: 'registering'
-        })
-        .limit(1)
-        .get();
-
-      if (exactResult.data && exactResult.data.length > 0) {
-        realActivityId = exactResult.data[0]._id;
-      } else {
-        // 2. 精确匹配失败，尝试模糊匹配
-        const allActivities = await db.collection('activities')
-          .where({ status: 'registering' })
-          .limit(100)
-          .get();
-
-        const keyword = activityName.trim().toLowerCase();
-        const matched = (allActivities.data || []).filter(a => {
-          const nameMatch = a.name && a.name.toLowerCase().includes(keyword);
-          const locationMatch = a.location && a.location.toLowerCase().includes(keyword);
-          // 也支持按组织者名字匹配（需要查询users表）
-          return nameMatch || locationMatch;
-        });
-
-        if (matched.length === 0) {
-          return {
-            success: false,
-            error: '未找到包含「' + activityName + '」的可报名活动'
-          };
-        } else if (matched.length === 1) {
-          // 只有一个匹配，直接使用
-          realActivityId = matched[0]._id;
-        } else {
-          // 多个匹配，返回列表供用户选择
-          return {
-            success: false,
-            error: 'MULTIPLE_MATCHES',
-            data: {
-              matches: matched.map(a => ({
-                id: a._id,
-                name: a.name,
-                time: a.time,
-                location: a.location
-              }))
-            }
-          };
-        }
-      }
-    } catch (e) {
-      return {
-        success: false,
-        error: '按活动名称查找失败：' + (e.message || '未知错误')
-      };
-    }
-  }
-
-  if (!realActivityId) {
-    return {
-      success: false,
-      error: '活动ID不能为空'
-    };
-  }
-
+exports.main = async function(event, context) {
+  var action = event.action || 'join';
+  var payload = event.payload || {};
+  var wxContext = cloud.getWXContext();
+  var openid = wxContext.OPENID;
   try {
-    const activityResult = await db.collection('activities').doc(realActivityId).get();
+    if (action === 'join') return await doJoin(payload, openid);
+    if (action === 'check-conflict') return await doCheckConflict(payload, openid);
+    return { success: false, message: '未知 action: ' + action };
+  } catch (err) {
+    logger.error('join-activity', action, { err: err });
+    return { success: false, message: err.message || '报名失败' };
+  }
+};
 
-    if (!activityResult.data) {
-      return {
-        success: false,
-        error: '活动不存在'
-      };
-    }
+async function doJoin(payload, openid) {
+  var activityId = payload.activityId;
+  var nickname = payload.nickname;
+  var avatar = payload.avatar || '';
+  var level = payload.level;
+  var partnerId = payload.partnerId;
+  var agent = payload.agent;
+  var agentName = payload.agentName;
+  var agentPhone = payload.agentPhone;
 
-    const activity = activityResult.data;
+  if (!nickname || nickname.trim().length < 2) return { success: false, message: '请输入有效的名字（至少2个字符）' };
+  if (!agent && !avatar) return { success: false, message: '请上传头像' };
+  if (!level || level < 1 || level > 10) return { success: false, message: '等级必须在1-10之间' };
+  if (!activityId) return { success: false, message: '活动ID不能为空' };
 
-    if (activity.status !== 'registering') {
-      return {
-        success: false,
-        error: '活动已开始或已结束，无法报名'
-      };
-    }
+  var actRes = await db.collection('activities').doc(activityId).get();
+  if (!actRes.data) return { success: false, message: '活动不存在' };
+  var activity = actRes.data;
+  if (activity.status !== 'registering') return { success: false, message: '活动已开始或已结束，无法报名' };
 
-    if (activity.current_players >= activity.max_players) {
-      return {
-        success: false,
-        error: '活动报名已满'
-      };
-    }
+  // 冲突检测（非代报时）- 仅检测，不阻止报名
+  var conflicts = [];
+  if (!agent) {
+    conflicts = await checkConflict(openid, activityId, activity.time);
+    // 冲突检测不阻止报名，只返回冲突信息
+  }
 
-    // 查找该用户在此活动中的所有报名记录
-    const allRegs = await db.collection('registrations').where({
-      activity_id: realActivityId,
-      user_id: openid
+  // 先清理可能存在的脏数据
+  try {
+    await db.collection('registrations').where({ activityId: null, userId: openid }).remove();
+  } catch (e) {}
+
+  // 代报时检查被代报人姓名是否重复，非代报时检查当前用户是否已报名
+  if (agent) {
+    // 代报：检查被代报人姓名是否重复
+    var existingByName = await db.collection('registrations').where({
+      activityId: activityId,
+      nickname: nickname.trim(),
+      cancelStatus: _.neq('approved')
     }).get();
-
-    // 已有未取消的活跃记录 → 拒绝
-    const activeReg = (allRegs.data || []).find(r => r.cancel_status !== 'approved');
-    if (activeReg) {
-      return {
-        success: false,
-        error: '您已报名此活动'
-      };
+    
+    if (existingByName.data && existingByName.data.length > 0) {
+      return { success: false, message: '该姓名已在活动中报名' };
     }
-
-    // 有已取消的记录 → 复用该条记录，通过 update 重新激活
-    const cancelledReg = (allRegs.data || []).find(r => r.cancel_status === 'approved');
-
-    // 固搭模式：如果当前用户已被别人选为搭档，需要检查
-    if (activity.type === 'fixed-doubles') {
-      const boundReg = await db.collection('registrations').where({
-        activity_id: realActivityId,
-        partner_id: openid,
-        cancel_status: _.neq('approved')
-      }).get();
-      if (boundReg.data && boundReg.data.length > 0) {
-        return { success: false, error: '您已被选为搭档，无需再报名' };
-      }
-    }
-
-    // 固搭模式：验证搭档合法性
-    if (activity.type === 'fixed-doubles' && partnerId) {
-      const partnerReg = await db.collection('registrations').where({
-        activity_id: realActivityId,
-        user_id: partnerId,
-        cancel_status: _.neq('approved')
-      }).get();
-
-      if (!partnerReg.data || partnerReg.data.length === 0) {
-        return { success: false, error: '所选搭档尚未报名' };
-      }
-
-      if (partnerReg.data[0].partner_id) {
-        return { success: false, error: '所选搭档已有搭档，请选择其他人' };
-      }
-    }
-
-    let registrationId;
-
-    if (cancelledReg) {
-      // 复用已取消的记录：清除取消状态，更新最新信息
-      await db.collection('registrations').doc(cancelledReg._id).update({
-        data: {
-          nickname: nickname.trim(),
-          avatar: avatar,
-          level: level,
-          team_id: null,
-          is_eliminated: false,
-          partner_id: partnerId || null,
-          cancel_status: _.remove(),
-          cancel_reason: _.remove(),
-          cancel_requested_at: _.remove(),
-          cancel_processed_at: _.remove(),
-          cancel_processed_by: _.remove(),
-          created_at: db.serverDate()
-        }
-      });
-      registrationId = cancelledReg._id;
-    } else {
-      // 全新报名
-      const registrationData = {
-        activity_id: realActivityId,
-        user_id: openid,
-        nickname: nickname.trim(),
-        avatar: avatar,
-        level: level,
-        team_id: null,
-        is_eliminated: false,
-        partner_id: partnerId || null,
-        created_at: db.serverDate()
-      };
-
-      const regResult = await db.collection('registrations').add({
-        data: registrationData
-      });
-      registrationId = regResult._id;
-    }
-
-    await db.collection('activities').doc(realActivityId).update({
-      data: {
-        current_players: _.inc(1)
+  } else {
+    // 非代报：检查当前用户是否已报名
+    var myRegs = await db.collection('registrations').where({ activityId: activityId, userId: openid }).get();
+    var myActive = null;
+    var myCancelled = null;
+    var myRejected = [];
+    (myRegs.data || []).forEach(function(r) {
+      if (r.cancelStatus === 'approved') {
+        myCancelled = r;
+      } else if (r.cancelStatus === 'rejected' || r.cancelStatus === 'pending') {
+        myRejected.push(r);
+      } else {
+        myActive = r;
       }
     });
 
-    // 固搭模式：互相绑定搭档关系
-    if (partnerId) {
-      await db.collection('registrations').where({
-        activity_id: realActivityId,
-        user_id: partnerId
-      }).update({
-        data: { partner_id: openid }
-      });
+    // 清理 rejected/pending 的记录（取消被拒绝或待审批的旧记录不影响重新报名）
+    // 若该记录仍占正式名额（applyStatus=active），删除时同步回收名额
+    for (var i = 0; i < myRejected.length; i++) {
+      try {
+        if (myRejected[i].applyStatus === 'active') {
+          await db.collection('activities').doc(activityId).update({ data: { currentPlayers: _.inc(-1) } });
+        }
+        await db.collection('registrations').doc(myRejected[i]._id).remove();
+      } catch (e) {}
     }
+
+    // 如果有已取消的记录，删除它以便重新报名
+    if (myCancelled && !myActive) {
+      try {
+        await db.collection('registrations').doc(myCancelled._id).remove();
+      } catch (e) {
+        // remove 失败时，清除 userId 以绕过唯一索引
+        console.error('删除已取消记录失败，尝试清除userId:', e.message);
+        await db.collection('registrations').doc(myCancelled._id).update({
+          data: { userId: 'cancelled_' + myCancelled._id, updatedAt: db.serverDate() }
+        });
+      }
+    }
+
+    if (myActive) return { success: false, message: '您已报名此活动' };
+  }
+
+  if (activity.type === 'fixed-doubles' && partnerId) {
+    var partnerReg = await db.collection('registrations').where({
+      activityId: activityId,
+      userId: partnerId,
+      cancelStatus: _.neq('approved')
+    }).get();
+    if (!partnerReg.data || partnerReg.data.length === 0) return { success: false, message: '所选搭档尚未报名' };
+    if (partnerReg.data[0].partnerId) return { success: false, message: '所选搭档已有搭档，请选择其他人' };
+  }
+  if (activity.type === 'fixed-doubles') {
+    var bound = await db.collection('registrations').where({
+      activityId: activityId,
+      partnerId: openid,
+      cancelStatus: _.neq('approved')
+    }).get();
+    if (bound.data && bound.data.length > 0) return { success: false, message: '您已被选为搭档，无需再报名' };
+  }
+
+  // 容量检查 + 三步写入（报名 + 人数 + 搭档绑定）放同一事务：
+  // count→add→inc 原子化，避免并发报名超卖
+  var transaction = await db.startTransaction();
+  try {
+    var validCount = await transaction.collection('registrations').where({
+      activityId: activityId,
+      applyStatus: 'active',
+      cancelStatus: _.neq('approved')
+    }).count();
+
+    var isWaiting = validCount.total >= activity.maxPlayers;
+
+    var regData = {
+      activityId: activityId,
+      userId: agent ? ('agent_' + openid + '_' + Date.now()) : openid,
+      nickname: nickname.trim(),
+      avatar: avatar,
+      level: Number(level),
+      partnerId: partnerId || null,
+      teamId: null,
+      applyStatus: isWaiting ? 'waiting' : 'active',
+      cancelStatus: null,
+      agentUserId: agent ? openid : null,
+      agentName: agent ? (agentName || nickname.trim()) : null,
+      agentPhone: agent ? (agentPhone || '') : null,
+      createdAt: db.serverDate(),
+      updatedAt: db.serverDate()
+    };
+
+    if (isWaiting) {
+      var wl = await transaction.collection('registrations').where({ activityId: activityId, applyStatus: 'waiting' }).count();
+      regData.waitlistOrder = wl.total + 1;
+    }
+
+    var addRes = await transaction.collection('registrations').add({ data: regData });
+    var registrationId = addRes._id;
+
+    if (!isWaiting) {
+      await transaction.collection('activities').doc(activityId).update({ data: { currentPlayers: _.inc(1) } });
+    }
+
+    if (partnerId) {
+      await transaction.collection('registrations').where({ activityId: activityId, userId: partnerId }).update({ data: { partnerId: openid } });
+    }
+
+    await transaction.commit();
 
     return {
       success: true,
       data: {
-        registrationId: registrationId
-      }
+        registrationId: registrationId,
+        applyStatus: regData.applyStatus,
+        isWaiting: isWaiting,
+        hasConflict: conflicts.length > 0,
+        conflicts: conflicts,
+        agentName: regData.agentName || null,
+        agentPhone: regData.agentPhone || null
+      },
+      message: isWaiting ? '报名成功，已进入候补' : '报名成功'
     };
-  } catch (err) {
-    console.error('报名失败：', err);
-    return {
-      success: false,
-      error: err.message || '报名失败'
-    };
+  } catch (e) {
+    await transaction.rollback();
+    if (e.message && e.message.indexOf('duplicate key') !== -1) {
+      return { success: false, message: '您已报名此活动，请勿重复报名' };
+    }
+    throw e;
   }
-};
+}
+
+// 冲突检测 action
+async function doCheckConflict(payload, openid) {
+  var activityId = payload.activityId;
+  if (!activityId) return { success: false, message: '活动ID不能为空' };
+  
+  var actRes = await db.collection('activities').doc(activityId).get();
+  if (!actRes.data) return { success: false, message: '活动不存在' };
+  
+  var conflicts = await checkConflict(openid, activityId, actRes.data.time);
+  
+  return {
+    success: true,
+    data: {
+      hasConflict: conflicts.length > 0,
+      conflicts: conflicts
+    }
+  };
+}
+
+// 冲突检测函数
+async function checkConflict(openid, activityId, activityTime) {
+  if (!activityTime) return [];
+  
+  var activityTimeDate = new Date(activityTime);
+  if (isNaN(activityTimeDate.getTime())) return [];
+  
+  // 查询用户所有 active 状态的报名
+  var myRegs = await db.collection('registrations').where({
+    userId: openid,
+    applyStatus: 'active',
+    cancelStatus: _.neq('approved')
+  }).get();
+  
+  if (!myRegs.data || myRegs.data.length === 0) return [];
+  
+  // 获取所有已报名的活动ID
+  var activityIds = myRegs.data.map(function(r) { return r.activityId; }).filter(function(id) { return id !== activityId; });
+  
+  if (activityIds.length === 0) return [];
+  
+  // 查询这些活动的信息
+  var activities = await db.collection('activities').where({
+    _id: _.in(activityIds)
+  }).get();
+  
+  // 检查时间冲突（前后2小时内）
+  var conflicts = [];
+  for (var i = 0; i < activities.data.length; i++) {
+    var act = activities.data[i];
+    if (!act.time) continue;
+    
+    var actTime = new Date(act.time);
+    if (isNaN(actTime.getTime())) continue;
+    
+    var timeDiff = Math.abs(activityTimeDate.getTime() - actTime.getTime());
+    var hoursDiff = timeDiff / (1000 * 60 * 60);
+    
+    if (hoursDiff <= 2) {
+      conflicts.push({
+        activityId: act._id,
+        name: act.name || '未命名活动',
+        time: act.time,
+        location: act.location || '待定'
+      });
+    }
+  }
+  
+  return conflicts;
+}

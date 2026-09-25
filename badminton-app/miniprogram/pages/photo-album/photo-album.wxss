@@ -1,0 +1,40 @@
+.album-page { padding: 24rpx; min-height: 100vh; }
+.album-loading { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.detail-section { background: rgba(255,255,255,0.96); padding: 30rpx 26rpx; border-radius: 30rpx; margin-bottom: 24rpx; border: 1rpx solid rgba(18,69,51,0.06); box-shadow: 0 8rpx 24rpx rgba(0,0,0,0.04); }
+.section-title { display: block; font-size: 32rpx; font-weight: 700; color: #12332b; margin-bottom: 20rpx; }
+.photo-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12rpx; }
+.photo-item { position: relative; border-radius: 16rpx; overflow: hidden; aspect-ratio: 1; }
+.photo-item image { width: 100%; height: 100%; }
+.photo-overlay { position: absolute; bottom: 0; left: 0; right: 0; padding: 8rpx 12rpx; background: linear-gradient(transparent,rgba(0,0,0,0.6)); display: flex; justify-content: space-between; align-items: center; }
+.photo-likes { font-size: 22rpx; color: #fff; }
+.photo-comments-count { font-size: 22rpx; color: #fff; }
+.photo-featured-tag { position: absolute; top: 8rpx; right: 8rpx; padding: 4rpx 12rpx; border-radius: 999rpx; background: rgba(246,165,59,0.9); color: #fff; font-size: 20rpx; font-weight: 700; }
+.featured-section { margin-bottom: 24rpx; }
+.featured-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12rpx; }
+.btn-bar { display: flex; gap: 16rpx; margin-top: 16rpx; }
+.btn-upload, .btn-ai-album { flex: 1; height: 88rpx; line-height: 88rpx; text-align: center; border-radius: 999rpx; font-size: 28rpx; font-weight: 700; border: none; }
+.btn-upload { background: linear-gradient(135deg,#0ea56b 0%,#0bc278 100%); color: #fff; }
+.btn-ai-album { background: linear-gradient(135deg,#536ff3 0%,#6b53c5 100%); color: #fff; }
+.empty-tip { padding: 32rpx; text-align: center; font-size: 26rpx; color: #8d9a95; }
+
+/* 相册头部 */
+.album-header { border-radius: 16rpx; }
+
+/* Tab 切换 */
+.tab-bar { border-radius: 16rpx 16rpx 0 0; }
+.tab-item { transition: color 0.2s; }
+
+/* 照片项 */
+.photo-item { border-radius: 8rpx; overflow: hidden; }
+
+/* 评论弹窗 */
+.picker-mask { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 999; display: flex; align-items: flex-end; }
+.picker-content { width: 100%; background: #fff; border-radius: 24rpx 24rpx 0 0; padding: 32rpx; }
+.picker-title { font-size: 32rpx; font-weight: 700; color: #1f2d29; text-align: center; margin-bottom: 24rpx; }
+.form-item { margin-bottom: 20rpx; }
+.form-label { font-size: 26rpx; color: #666; margin-bottom: 8rpx; }
+.form-input { width: 100%; height: 72rpx; border: 1rpx solid #e0e0e0; border-radius: 12rpx; padding: 0 16rpx; font-size: 28rpx; box-sizing: border-box; }
+.picker-actions { display: flex; gap: 16rpx; margin-top: 24rpx; }
+.btn-cancel { flex: 1; height: 80rpx; line-height: 80rpx; border-radius: 999rpx; background: #f4f7f6; color: #4a5e56; font-size: 28rpx; border: none; }
+.btn-confirm { flex: 1; height: 80rpx; line-height: 80rpx; border-radius: 999rpx; background: #0ea56b; color: #fff; font-size: 28rpx; border: none; }
+.btn-confirm[disabled] { background: #cdd7d2; }

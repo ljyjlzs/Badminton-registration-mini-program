@@ -8,6 +8,7 @@
 
 .detail-shell {
   padding: 24rpx;
+  padding-bottom: 160rpx;
 }
 
 .overview-card {
@@ -25,6 +26,46 @@
   justify-content: space-between;
   gap: 18rpx;
   margin-bottom: 24rpx;
+}
+
+.overview-head-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12rpx;
+}
+
+.btn-share {
+  font-size: 22rpx;
+  line-height: 1.6;
+  padding: 4rpx 18rpx;
+  margin: 0;
+  border-radius: 999rpx;
+  background: #f0f7f4;
+  color: #0ea56b;
+  border: 1rpx solid rgba(14, 165, 107, 0.2);
+}
+
+.btn-share::after {
+  border: none;
+}
+
+.bottom-action-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 16rpx 32rpx calc(16rpx + env(safe-area-inset-bottom));
+  background: #fff;
+  box-shadow: 0 -2rpx 12rpx rgba(0,0,0,0.06);
+  z-index: 100;
+}
+
+.bottom-action-bar .btn-primary,
+.bottom-action-bar .btn-cancel-reg,
+.bottom-action-bar .btn-waitlist {
+  width: 100%;
+  margin-top: 0;
 }
 
 .overview-copy {
@@ -772,3 +813,202 @@
 .cancel-modal-btn.approve:active {
   transform: scale(0.985);
 }
+
+/* ===== T5 容量调整 ===== */
+.capacity-entry {
+  display: inline-flex;
+  padding: 8rpx 20rpx;
+  border-radius: 999rpx;
+  background: rgba(14,165,107,0.08);
+  color: #0ea56b;
+  font-size: 24rpx;
+  font-weight: 600;
+  margin-top: 16rpx;
+}
+
+/* ===== T7 候补 ===== */
+.btn-waitlist {
+  margin-top: 20rpx;
+  background: #f0f7f4;
+  color: #0ea56b;
+  border: 2rpx solid rgba(14,165,107,0.2);
+}
+.btn-waitlist:active { background: #e6f3ed; }
+.waitlist-section { margin-top: 16rpx; }
+.waitlist-section .section-caption { font-size: 28rpx; font-weight: 600; color: #333; display: flex; align-items: center; }
+
+/* ===== T9 AI 栏 ===== */
+.ai-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16rpx;
+}
+.ai-grid-item {
+  background: #f9fffc;
+  border: 1rpx solid rgba(14,165,107,0.12);
+  border-radius: 20rpx;
+  padding: 24rpx 16rpx;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+.ai-grid-item:active { background: #eef7f3; }
+.ai-grid-icon { font-size: 40rpx; }
+.ai-grid-label { font-size: 24rpx; color: #1f2d29; font-weight: 600; }
+
+/* ===== 代报名弹窗 ===== */
+.agent-entry {
+  margin-top: 24rpx;
+}
+.btn-agent {
+  background: #f9fffc;
+  color: #0ea56b;
+  border: 2rpx solid rgba(14,165,107,0.2);
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  padding: 20rpx 0;
+}
+.btn-agent:active { background: #eef7f3; }
+
+/* ===== 近期活动列表 ===== */
+.recent-list {
+  margin-top: 16rpx;
+}
+.recent-item {
+  padding: 20rpx 24rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+.recent-item:last-child { border-bottom: none; }
+.recent-name { font-size: 28rpx; font-weight: 600; color: #1f2d29; display: block; }
+.recent-meta { font-size: 22rpx; color: #84938e; display: block; margin-top: 4rpx; }
+
+/* ===== 活动快照 ===== */
+.snapshot-title { font-size: 28rpx; font-weight: 600; color: #1f2d29; margin-bottom: 12rpx; }
+.snapshot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12rpx; }
+.snapshot-item { background: #f9fffc; border-radius: 12rpx; padding: 16rpx; text-align: center; }
+.snapshot-val { font-size: 32rpx; font-weight: 700; color: #0ea56b; display: block; }
+.snapshot-label { font-size: 22rpx; color: #84938e; display: block; margin-top: 4rpx; }
+
+/* ===== 禁止开始提示 ===== */
+.no-start-tip { background: #fff6f6; color: #c0392b; border-radius: 12rpx; padding: 16rpx 20rpx; font-size: 26rpx; margin-top: 12rpx; }
+
+/* ===== 排名截断 ===== */
+.rank-truncate { max-height: 480rpx; overflow: hidden; position: relative; }
+.rank-truncate.rank-expanded { max-height: none; }
+.rank-toggle { text-align: center; padding: 16rpx 0; color: #0ea56b; font-size: 26rpx; font-weight: 600; }
+
+/* ===== 新比赛 UI ===== */
+.btns-row { display: flex; gap: 16rpx; margin-top: 20rpx; }
+.btns-row button { flex: 1; }
+
+/* ===== 组织者解析区 ===== */
+.org-reason { background: #f9fffc; border-radius: 16rpx; padding: 20rpx; margin-top: 16rpx; }
+.org-reason-text { font-size: 26rpx; color: #1f2d29; line-height: 1.6; }
+
+/* ===== 满员提示 ===== */
+.full-tip-inline { display: inline-flex; background: #fff6f6; color: #c0392b; border-radius: 999rpx; padding: 8rpx 20rpx; font-size: 24rpx; margin-top: 12rpx; }
+
+/* ===== T22 全局 banner ===== */
+.global-banner { background: #fff; border-radius: 16rpx; padding: 20rpx 24rpx; margin-bottom: 16rpx; }
+.global-banner-row { display: flex; align-items: center; gap: 12rpx; padding: 8rpx 0; }
+.global-banner-row.live { color: #0ea56b; font-weight: 600; }
+.banner-dot { width: 12rpx; height: 12rpx; border-radius: 50%; background: #ccc; }
+.global-banner-row.live .banner-dot { background: #0ea56b; }
+.banner-text { font-size: 26rpx; color: #333; }
+
+/* ===== T26 比赛卡片增强 ===== */
+.match-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16rpx; }
+.card-copy { flex: 1; }
+.round-label { font-size: 24rpx; color: #84938e; font-weight: 600; }
+.match-card-body { display: flex; align-items: center; gap: 16rpx; }
+.team-block { flex: 1; text-align: center; }
+.team-avatar { width: 72rpx; height: 72rpx; border-radius: 50%; margin: 0 auto 8rpx; display: flex; align-items: center; justify-content: center; font-size: 28rpx; font-weight: 700; color: #fff; }
+.team1-avatar { background: linear-gradient(135deg, #0ea56b, #0bc278); }
+.team2-avatar { background: linear-gradient(135deg, #536ff3, #6b53c5); }
+.team-name-row { display: flex; align-items: center; justify-content: center; gap: 8rpx; }
+.team-name { font-size: 28rpx; font-weight: 700; color: #1f2d29; }
+.win-tag { font-size: 18rpx; padding: 2rpx 10rpx; border-radius: 999rpx; background: #0ea56b; color: #fff; }
+.team-members { font-size: 22rpx; color: #84938e; display: block; }
+.vs-block { flex-shrink: 0; }
+.vs-circle { width: 64rpx; height: 64rpx; border-radius: 50%; background: #f0f5f3; display: flex; align-items: center; justify-content: center; font-size: 22rpx; font-weight: 700; color: #84938e; }
+.match-card-actions { margin-top: 16rpx; text-align: center; }
+.score-band { display: flex; align-items: center; justify-content: center; gap: 8rpx; }
+.score-num { font-size: 36rpx; font-weight: 800; color: #1f2d29; }
+.score-num.winner { color: #0ea56b; }
+.score-colon { font-size: 28rpx; color: #ccc; }
+.status-line { font-size: 24rpx; color: #84938e; }
+.status-line.playing { color: #0ea56b; font-weight: 600; }
+
+/* UX-11: 我的比赛高亮 */
+.match-card.my-match {
+  border: 2rpx solid rgba(14, 165, 107, 0.45);
+  background: linear-gradient(180deg, #f3fbf7 0%, #ffffff 100%);
+  box-shadow: 0 8rpx 24rpx rgba(14, 165, 107, 0.12);
+}
+.my-tag {
+  margin-left: 8rpx;
+  font-size: 20rpx;
+  padding: 2rpx 12rpx;
+  border-radius: 999rpx;
+  background: #0ea56b;
+  color: #fff;
+  font-weight: 700;
+}
+
+/* UX-22: 时间格可点加入日历 */
+.time-cell {
+  position: relative;
+}
+.time-cell .calendar-hint {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: var(--primary-color, #0ea56b);
+  opacity: 0.8;
+}
+
+/* UX-17: 代报操作热区 */
+.agent-op {
+  min-height: 56rpx;
+  padding: 12rpx 24rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== T8 代报列表 ===== */
+.agent-reg-list { margin-top: 16rpx; }
+.agent-reg-item { display: flex; align-items: center; justify-content: space-between; padding: 16rpx 0; border-bottom: 1rpx solid #f0f5f3; }
+.agent-reg-item:last-child { border-bottom: none; }
+.agent-reg-info { flex: 1; }
+
+/* ===== T24 头像图片 ===== */
+.avatar-img { width: 88rpx; height: 88rpx; border-radius: 50%; margin-bottom: 14rpx; }
+
+/* ===== T48 语音填分 ===== */
+.voice-section { background: #fff; border-radius: 20rpx; padding: 24rpx; margin-bottom: 20rpx; text-align: center; }
+.voice-section.voice-disabled { opacity: 0.6; }
+.voice-main { display: inline-flex; align-items: center; gap: 12rpx; padding: 20rpx 40rpx; border-radius: 999rpx; background: linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 100%); border: 1rpx solid rgba(79,105,241,0.16); }
+.voice-main.recording { background: linear-gradient(135deg, #fff0f0 0%, #ffe8e8 100%); border-color: rgba(214,69,69,0.2); }
+.voice-mic { font-size: 36rpx; }
+.voice-label { font-size: 28rpx; font-weight: 600; color: #4f69f1; }
+.voice-main.recording .voice-label { color: #d64545; }
+.voice-hint { font-size: 24rpx; color: #84938e; margin-top: 12rpx; display: block; }
+.voice-confirm-bar { background: #fff; border-radius: 20rpx; padding: 24rpx; margin-bottom: 20rpx; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.08); }
+.voice-confirm-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16rpx; }
+.voice-confirm-title { font-size: 28rpx; font-weight: 700; color: #1f2d29; }
+.voice-confirm-score { font-size: 32rpx; font-weight: 800; color: #0ea56b; }
+.voice-confirm-btns { display: flex; gap: 16rpx; }
+.voice-btn-cancel { flex: 1; height: 80rpx; line-height: 80rpx; border-radius: 999rpx; background: #f4f7f6; color: #4a5e56; font-size: 28rpx; font-weight: 600; border: none; }
+.voice-btn-confirm { flex: 1; height: 80rpx; line-height: 80rpx; border-radius: 999rpx; background: #0ea56b; color: #fff; font-size: 28rpx; font-weight: 600; border: none; }
+.voice-btn-confirm[disabled] { background: #cdd7d2; }
+
+/* ===== T11 导航按钮 ===== */
+.nav-buttons { display: flex; gap: 16rpx; margin-top: 24rpx; }
+.nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8rpx; padding: 24rpx 0; background: #f9fffc; border-radius: 16rpx; }
+.nav-btn-icon { font-size: 36rpx; }
+.nav-btn-text { font-size: 24rpx; color: #1f2d29; font-weight: 600; }

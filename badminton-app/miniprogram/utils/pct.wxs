@@ -1,0 +1,5 @@
+// BUG-42: 进度百分比兜底 — currentPlayers > maxPlayers（历史超员/脏数据）时钳到 100，防 progress 溢出
+module.exports.pct = function(cur, max) {
+  if (!max) return 0;
+  return Math.min(100, (cur || 0) / max * 100);
+};

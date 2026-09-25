@@ -1,0 +1,94 @@
+<view class="court-page">
+  <view wx:if="{{loading}}" class="court-loading">
+    <text style="color:#8d9a95">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <view class="overview-card" wx:if="{{activity}}">
+      <view class="overview-kicker">场地双打</view>
+      <view class="activity-name">{{activity.name}}</view>
+      <view class="overview-grid">
+        <view class="overview-item">
+          <text class="overview-label">状态</text>
+          <text class="overview-value">{{status === 'registering' ? '报名中' : status === 'started' ? '进行中' : status}}</text>
+        </view>
+        <view class="overview-item">
+          <text class="overview-label">每场人数</text>
+          <text class="overview-value">{{activity.playersPerCourt || 4}}人</text>
+        </view>
+        <view class="overview-item">
+          <text class="overview-label">场地数</text>
+          <text class="overview-value">{{courts.length}}</text>
+        </view>
+        <view class="overview-item">
+          <text class="overview-label">未分配</text>
+          <text class="overview-value">{{unassigned.length}}人</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="detail-section" wx:if="{{isOrganizer && status === 'registering'}}">
+      <button class="btn-config" bindtap="showConfig">配置每场人数</button>
+    </view>
+
+    <view class="detail-section">
+      <text class="section-title">场地列表</text>
+      <block wx:for="{{courts}}" wx:key="courtId">
+        <view class="court-card">
+          <view class="court-header">
+            <text class="court-label">{{item.label}}</text>
+            <text class="court-capacity">{{item.members.length}}/{{item.capacity}}人</text>
+            <button class="btn-remove" wx:if="{{isOrganizer && status === 'registering'}}" data-courtno="{{item.courtNo}}" bindtap="deleteCourt">删除</button>
+          </view>
+          <view class="court-members" wx:if="{{item.members.length > 0}}">
+            <view class="court-member" wx:for="{{item.members}}" wx:for-item="m" wx:key="userId">
+              <view class="avatar">{{m.nickname[0] || '?'}}</view>
+              <text class="name">{{m.nickname}}</text>
+            </view>
+          </view>
+          <view wx:else class="empty-tip">暂无成员</view>
+        </view>
+      </block>
+      <view wx:if="{{courts.length === 0}}" class="empty-tip">暂无场地，请先配置</view>
+    </view>
+
+    <view class="detail-section" wx:if="{{unassigned.length > 0}}">
+      <text class="section-title">未分配 ({{unassigned.length}}人)</text>
+      <view class="unassigned-list">
+        <view class="court-member" wx:for="{{unassigned}}" wx:key="userId">
+          <view class="avatar">{{item.nickname[0] || '?'}}</view>
+          <text class="name">{{item.nickname}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{isOrganizer && status === 'registering'}}" class="action-bar">
+      <button class="btn-auto" bindtap="autoAssign">自动分配</button>
+      <button class="btn-add" bindtap="addCourt">新增场地</button>
+    </view>
+
+    <view wx:if="{{isOrganizer && status === 'registering'}}" style="margin-top:16rpx">
+      <button class="btn-start-court" bindtap="checkReady">检查并开始</button>
+    </view>
+
+    <view wx:if="{{readyResult && readyResult.ready}}" class="ready-ok">✓ 所有场地已就绪</view>
+    <view wx:if="{{readyResult && !readyResult.ready && readyResult.messages.length > 0}}" class="ready-warn">
+      <block wx:for="{{readyResult.messages}}" wx:key="index">{{item}}&#10;</block>
+    </view>
+
+    <view wx:if="{{status !== 'registering'}}" style="margin-top:16rpx">
+      <button class="btn-start-court" bindtap="goToCourtDetail">查看场地详情</button>
+    </view>
+  </block>
+
+  <view class="modal-mask" wx:if="{{showConfigModal}}" bindtap="hideConfig">
+    <view class="modal-content" catchtap="">
+      <view class="modal-title">配置每场人数</view>
+      <input class="modal-input" type="number" value="{{ppcInput}}" bindinput="onPpcInput" placeholder="至少4人" />
+      <view class="modal-btns">
+        <button class="btn-cancel" bindtap="hideConfig">取消</button>
+        <button class="btn-confirm" bindtap="confirmConfig">确认</button>
+      </view>
+    </view>
+  </view>
+</view>

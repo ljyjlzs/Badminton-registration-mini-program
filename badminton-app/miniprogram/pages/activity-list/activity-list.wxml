@@ -1,3 +1,4 @@
+<wxs src="../../utils/pct.wxs" module="pct" />
 <view class="activity-page">
   <view class="list-hero">
     <view class="hero-badge">ACTIVITY HUB</view>
@@ -16,6 +17,24 @@
         bindconfirm="doSearch"
         confirm-type="search"/>
       <text wx:if="{{searchKeyword}}" class="search-clear" bindtap="clearSearch">清除</text>
+    </view>
+  </view>
+
+  <view class="filter-bar" wx:if="{{currentTab !== 'search' || !searchKeyword}}">
+    <view class="filter-row">
+      <view class="filter-chip {{filterType === 'singles' ? 'active' : ''}}" data-type="singles" bindtap="onFilterTypeChange">单打</view>
+      <view class="filter-chip {{filterType === 'doubles' ? 'active' : ''}}" data-type="doubles" bindtap="onFilterTypeChange">双打</view>
+      <view class="filter-chip {{filterType === 'fixed-doubles' ? 'active' : ''}}" data-type="fixed-doubles" bindtap="onFilterTypeChange">固搭</view>
+      <view class="filter-chip {{filterType === 'court-doubles' ? 'active' : ''}}" data-type="court-doubles" bindtap="onFilterTypeChange">场地双打</view>
+    </view>
+    <view class="filter-date-row">
+      <picker mode="date" value="{{filterDateStart}}" bindchange="onDateStartChange">
+        <view class="filter-date-chip">起始：{{filterDateStart || '不限'}}</view>
+      </picker>
+      <picker mode="date" value="{{filterDateEnd}}" bindchange="onDateEndChange">
+        <view class="filter-date-chip">截止：{{filterDateEnd || '不限'}}</view>
+      </picker>
+      <view wx:if="{{filterDateStart || filterDateEnd || filterType}}" class="filter-clear" bindtap="clearFilter">清除筛选</view>
     </view>
   </view>
 
@@ -65,9 +84,9 @@
       <view wx:if="{{filteredCreatedActivities.length > 0}}" class="activity-list">
         <view
           wx:for="{{filteredCreatedActivities}}"
-          wx:key="_id"
+          wx:key="id"
           class="activity-card"
-          data-id="{{item._id}}"
+          data-id="{{item.id}}"
           bindtap="goToActivity">
           <view class="card-top">
             <text class="activity-name">{{item.name}}</text>
@@ -75,8 +94,6 @@
               <text wx:if="{{item.status === 'registering'}}">报名中</text>
               <text wx:elif="{{item.status === 'grouping'}}">分组中</text>
               <text wx:elif="{{item.status === 'playing'}}">比赛中</text>
-              <text wx:elif="{{item.status === 'challenge'}}">挑战赛</text>
-              <text wx:elif="{{item.status === 'final'}}">决赛</text>
               <text wx:elif="{{item.status === 'finished'}}">已结束</text>
               <text wx:else>{{item.status}}</text>
             </view>
@@ -84,17 +101,17 @@
 
           <view class="meta-row">
             <text class="meta-item">📍 {{item.location}}</text>
-            <text class="meta-item">🕒 {{formatTime(item.time)}}</text>
-            <text class="meta-item">🏸 {{item.type === 'singles' ? '单打' : item.type === 'fixed-doubles' ? '双打固搭' : '双打轮转'}}</text>
+            <text class="meta-item">🕒 {{item.formattedTime || '待定'}}</text>
+            <text class="meta-item">🏸 {{item.type === 'singles' ? '单打' : item.type === 'fixed-doubles' ? '双打固搭' : item.type === 'court-doubles' ? '场地双打' : '双打轮转'}}</text>
           </view>
 
           <view class="progress-row">
             <text class="progress-label">报名进度</text>
-            <text class="progress-count">{{item.current_players || 0}} / {{item.max_players}}</text>
+            <text class="progress-count">{{item.currentPlayers || 0}} / {{item.maxPlayers}}<text wx:if="{{item.maxPlayers - (item.currentPlayers || 0) > 0}}" class="remaining-tag">剩余{{item.maxPlayers - (item.currentPlayers || 0)}}名额</text><text wx:else class="remaining-tag full">已满</text></text>
           </view>
 
           <progress
-            percent="{{(item.current_players / item.max_players) * 100}}"
+            percent="{{pct.pct(item.currentPlayers, item.maxPlayers)}}"
             stroke-width="8"
             active
             activeColor="#0ea56b"
@@ -109,24 +126,18 @@
         <text>加载中...</text>
       </view>
 
-      <view wx:if="{{!loading && filteredJoinedActivities.length === 0 && !searchKeyword}}" class="empty-tip">
+      <view wx:if="{{!loading && filteredJoinedActivities.length === 0}}" class="empty-tip">
         <text class="empty-icon">📅</text>
         <text class="empty-text">还没有参加活动</text>
         <text class="empty-desc">你报名过的比赛，都会集中显示在这里。</text>
       </view>
 
-      <view wx:if="{{!loading && filteredJoinedActivities.length === 0 && searchKeyword}}" class="empty-tip">
-        <text class="empty-icon">🔍</text>
-        <text class="empty-text">没有找到匹配活动</text>
-        <text class="empty-desc">试试更换关键词，或者切换到查找活动页签。</text>
-      </view>
-
       <view wx:if="{{filteredJoinedActivities.length > 0}}" class="activity-list">
         <view
           wx:for="{{filteredJoinedActivities}}"
-          wx:key="_id"
+          wx:key="id"
           class="activity-card"
-          data-id="{{item._id}}"
+          data-id="{{item.id}}"
           bindtap="goToActivity">
           <view class="card-top">
             <text class="activity-name">{{item.name}}</text>
@@ -134,8 +145,6 @@
               <text wx:if="{{item.status === 'registering'}}">报名中</text>
               <text wx:elif="{{item.status === 'grouping'}}">分组中</text>
               <text wx:elif="{{item.status === 'playing'}}">比赛中</text>
-              <text wx:elif="{{item.status === 'challenge'}}">挑战赛</text>
-              <text wx:elif="{{item.status === 'final'}}">决赛</text>
               <text wx:elif="{{item.status === 'finished'}}">已结束</text>
               <text wx:else>{{item.status}}</text>
             </view>
@@ -143,9 +152,23 @@
 
           <view class="meta-row">
             <text class="meta-item">📍 {{item.location}}</text>
-            <text class="meta-item">🕒 {{formatTime(item.time)}}</text>
-            <text class="meta-item">🏸 {{item.type === 'singles' ? '单打' : item.type === 'fixed-doubles' ? '双打固搭' : '双打轮转'}}</text>
+            <text class="meta-item">🕒 {{item.formattedTime || '待定'}}</text>
+            <text class="meta-item">🏸 {{item.type === 'singles' ? '单打' : item.type === 'fixed-doubles' ? '双打固搭' : item.type === 'court-doubles' ? '场地双打' : '双打轮转'}}</text>
           </view>
+
+          <text class="meta-item">{{item.daysLeft > 0 ? '还有 ' + item.daysLeft + ' 天开赛' : (item.daysLeft === 0 ? '今日开赛' : '已开赛/结束')}}</text>
+
+          <view class="progress-row">
+            <text class="progress-label">报名进度</text>
+            <text class="progress-count">{{item.currentPlayers || 0}} / {{item.maxPlayers}}<text wx:if="{{item.maxPlayers - (item.currentPlayers || 0) > 0}}" class="remaining-tag">剩余{{item.maxPlayers - (item.currentPlayers || 0)}}名额</text><text wx:else class="remaining-tag full">已满</text></text>
+          </view>
+
+          <progress
+            percent="{{pct.pct(item.currentPlayers, item.maxPlayers)}}"
+            stroke-width="8"
+            active
+            activeColor="#0ea56b"
+            backgroundColor="#dfe8e4"/>
         </view>
       </view>
     </view>
@@ -165,9 +188,9 @@
       <view wx:if="{{!searchLoading && searchResults.length > 0}}" class="activity-list">
         <view
           wx:for="{{searchResults}}"
-          wx:key="_id"
+          wx:key="id"
           class="activity-card"
-          data-id="{{item._id}}"
+          data-id="{{item.id}}"
           bindtap="goToActivity">
           <view class="card-top">
             <text class="activity-name">{{item.name}}</text>
@@ -176,22 +199,30 @@
 
           <view class="meta-row">
             <text class="meta-item">📍 {{item.location}}</text>
-            <text class="meta-item">🕒 {{formatTime(item.time)}}</text>
-            <text class="meta-item">🏸 {{item.type === 'singles' ? '单打' : item.type === 'fixed-doubles' ? '双打固搭' : '双打轮转'}}</text>
+            <text class="meta-item">🕒 {{item.formattedTime || '待定'}}</text>
+            <text class="meta-item">🏸 {{item.type === 'singles' ? '单打' : item.type === 'fixed-doubles' ? '双打固搭' : item.type === 'court-doubles' ? '场地双打' : '双打轮转'}}</text>
           </view>
 
           <view class="progress-row">
             <text class="progress-label">报名进度</text>
-            <text class="progress-count">{{item.current_players || 0}} / {{item.max_players}}</text>
+            <text class="progress-count">{{item.currentPlayers || 0}} / {{item.maxPlayers}}<text wx:if="{{item.maxPlayers - (item.currentPlayers || 0) > 0}}" class="remaining-tag">剩余{{item.maxPlayers - (item.currentPlayers || 0)}}名额</text><text wx:else class="remaining-tag full">已满</text></text>
           </view>
 
           <progress
-            percent="{{(item.current_players / item.max_players) * 100}}"
+            percent="{{pct.pct(item.currentPlayers, item.maxPlayers)}}"
             stroke-width="8"
             active
             activeColor="#0ea56b"
             backgroundColor="#dfe8e4"/>
         </view>
+      </view>
+
+      <view wx:if="{{currentTab === 'search' && availableLoadingMore}}" class="loading">
+        <view class="loading-spinner"></view>
+        <text>加载更多...</text>
+      </view>
+      <view wx:if="{{currentTab === 'search' && !availableLoadingMore && ((searchKeyword ? searchHasMore : availableHasMore) === false) && searchResults.length > 0}}" class="empty-tip" style="padding:12rpx 0;">
+        <text style="color:#999;font-size:24rpx;">没有更多了</text>
       </view>
     </view>
   </view>

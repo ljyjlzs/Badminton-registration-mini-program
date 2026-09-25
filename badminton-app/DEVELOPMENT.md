@@ -188,6 +188,29 @@ users          # 用户
 
 ## 部署方法
 
+0. **部署前先同步共享模块**（必做）：`node cloudfunctions/sync-shared.js`
+   （把 `_shared/rateLimit.js`、`validate.js`、`ai.js` 等复制进各函数目录；云函数打包不支持跨目录 require。）
 1. 右键点击云函数文件夹
 2. 选择「上传并部署：云端安装依赖」
 3. 等待部署完成
+
+### cloudbaserc 唯一真源
+
+以 `cloudfunctions/cloudbaserc.json` 为**唯一真源**，根清单 `badminton-app/cloudbaserc.json` 仅兼容保留（供 CloudBase CLI 从子目录调用），函数集以真源为准。
+
+### AI 密钥安全与轮换
+
+**当前状态**：`cloudbaserc.json` 中的 `AI_API_KEY` 已置空，密钥须通过微信云开发控制台注入，不得写入任何配置文件或代码。
+
+**部署前配置步骤**：
+1. 登录[微信云开发控制台](https://console.cloud.tencent.com/tcb) → 云函数 → 环境变量
+2. 为以下 8 个 AI 云函数分别设置环境变量：
+   - `ai-chat`、`ai-history`、`generate-copy`、`invite`、`parse-activity`、`photo-ai-note`、`recommend-time`、`rules-qa`
+3. 每个函数设置：`AI_API_KEY`（密钥）、`AI_BASE_URL`（网关地址）、`AI_MODEL`（模型名）
+
+**密钥轮换要求**：历史上曾有密钥泄露到 git 提交记录（`9e456ea`→`9d59216`→`1945480`），**必须立即到 Mimo 开放平台轮换该 API Key**，旧密钥已不可信。轮换后更新控制台环境变量即可，无需改代码。
+
+**禁止事项**：
+- 禁止将密钥写入 `cloudbaserc.json`、代码、文档或任何 git 跟踪文件
+- 禁止在日志中输出完整密钥（如需排查，只打前 7 位：`key.slice(0,7)`）
+- 提交前检查：`git diff --cached | grep -i 'api[_-]key\|tp-[a-z0-9]'` 应为空

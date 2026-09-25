@@ -1,667 +1,190 @@
 /**
- * ai-chat 云函数 - AI 聊天（带用户数据上下文 + Tool Call 操作确认）
- *
- * 调用小米 Mimo API（OpenAI 兼容格式）
- * 每次对话前自动查询用户相关数据作为上下文注入
- *
- * Tool Call 机制：
- *   - AI 需要执行操作时，在回复末尾附加 __ACTION__ JSON 块
- *   - 前端解析后弹出确认卡片，用户确认后把结果通过 action_result 入参反馈
+ * ai-chat 云函数 - 小羽对话助手
+ * 对齐 AiServiceImpl.buildUserContext / sanitizeChatReply
+ * payload: { action: 'chat', message?, history? }
+ * 历史读写由 ai-history 云函数负责，本函数不再提供 action:'history'
  */
-
 const cloud = require('wx-server-sdk');
-const https = require('https');
+const logger = require('./logger');
+// ARCH-01: 共享 AI 模块（由 sync-shared.js 复制到本目录，必须本地 require）
+const { callAI } = require('./ai.js');
+const { rateLimit } = require('./rateLimit.js');
 
-cloud.init({
-  env: cloud.DYNAMIC_CURRENT_ENV
-});
-
-// 小米 Mimo API Key
-const MIMO_API_KEY = 'tp-c8yy59jtcd38ksv6hicz0yq0mofymzxlijbhqxg68gnanpld';
-
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 
-// 状态中文映射
-const statusMap = {
-  'registering': '报名中',
-  'grouping': '分组中',
-  'playing': '进行中',
-  'challenge': '挑战赛',
-  'final': '决赛',
-  'finished': '已结束'
-};
+const SYSTEM_PROMPT = `你是小羽，一个羽毛球活动助手。你既可以回答各种日常问题，也可以协助用户管理羽毛球活动。
 
-// 类型中文映射
-const typeMap = {
-  'singles': '单打',
-  'doubles': '双打轮换',
-  'fixed-doubles': '双打固搭'
-};
+你的能力：
+1. 回答各种问题：知识问答、聊天、写作、翻译、计算等
+2. 协助羽毛球活动：查看可报名的活动、生成报名确认、生成取消报名确认等
 
-// 时间格式化函数（兼容多种时间格式）
-function formatTime(timeValue) {
-  if (!timeValue) return '时间待定';
+重要规则：你只能建议和确认，不能替用户执行任何操作。用户确认前，绝不能声称"已报名""报名成功""已成功报名"等。只有收到"[系统通知] 操作执行结果："之后，你才可以确认该操作已完成。
 
-  let timestamp = timeValue;
+请用友好、简洁的语气回答。如果是羽毛球相关问题，可以主动提供活动信息。不要使用 Markdown 标记符号（如 **加粗**、##标题、- 列表、引号代码、> 引用），用纯文本和简单换行排版。
 
-  if (typeof timeValue === 'string') {
-    if (timeValue.includes('T')) {
-      timestamp = new Date(timeValue).getTime();
-    } else if (!isNaN(timeValue)) {
-      timestamp = parseInt(timeValue);
-    } else {
-      return '时间待定';
-    }
-  } else if (typeof timeValue === 'object') {
-    if (timeValue.$date) {
-      timestamp = timeValue.$date;
-    } else {
-      return '时间待定';
-    }
-  }
+【用户信息】昵称：{nickname}，等级：{level}
 
-  if (!timestamp || isNaN(timestamp)) return '时间待定';
+【可报名的活动】(N个)
+- 活动ID: ...
+  名称: ...，类型: ...，时间: ...，地点: ...
 
-  const date = new Date(timestamp);
-  if (isNaN(date.getTime())) return '时间待定';
+当用户要求报名时：
+1. 如果用户明确指定了上面某个活动，先输出一句简短说明，然后必须紧跟以下操作卡片（不要用代码块）：
+__ACTION__{"action":"join_activity","confirm_text":"确认报名参加活动","params":{"activityId":"<活动ID>","activityName":"<活动名称>"}}__END__
+2. 如果用户没有指定活动，或描述模糊匹配到多个活动，请输出：
+__SELECT__[{"id":"<ID>","name":"<名称>","time":"<时间>","location":"<地点>"}]__END__
+并请用户选择要报名的活动。
+3. 禁止在输出 __ACTION__ 之前说"已报名"或"报名成功"；报名是否成功以系统通知为准。
+4. 如果用户要求取消报名，输出：
+__ACTION__{"action":"cancel_registration","confirm_text":"确认申请取消报名","params":{"activityId":"<活动ID>","activityName":"<活动名称>"}}__END__
+5. 用户只问问题或查看信息时，正常聊天回答，不要输出任何操作卡片标记。`;
 
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const hour = date.getHours();
-  const minute = date.getMinutes();
-  return month + '月' + day + '日 ' + hour + ':' + (minute < 10 ? '0' + minute : minute);
+// 清洗拼接进 SYSTEM_PROMPT 的可控字段，防止组织者用活动名/地点等内容注入提示词
+function sanitizeText(s, maxLen) {
+  if (s == null) return '';
+  let t = String(s)
+    .replace(/[\\'"`\r\n\t]/g, ' ')
+    .replace(/[<>{}]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (maxLen > 0 && t.length > maxLen) t = t.slice(0, maxLen);
+  return t;
 }
 
-// ============================================================
-// 构建用户数据上下文（并行查询优化版本）
-// ============================================================
-async function buildUserContext(openid) {
-  const lines = [];
-  lines.push('你是羽毛球活动管理小程序的内置AI系统。你直接连接小程序后端，拥有操作权限。');
-  lines.push('');
-  lines.push('## 操作指令（最高优先级，必须严格遵守）');
-  lines.push('');
-  lines.push('当用户要求"创建活动/报名/取消报名"或表达类似意图时，你必须在回复末尾输出操作块，前端会弹确认卡片让用户确认后自动执行。');
-  lines.push('');
-  lines.push('### 支持的操作');
-  lines.push('1. create_activity - 创建活动');
-  lines.push('   params: {name:"活动名", time:"2026-05-10T09:00", location:"场地名", type:"singles"}');
-  lines.push('   type可选: singles(单打) / doubles(双打轮换) / fixed-doubles(双打固搭)');
-  lines.push('');
-  lines.push('2. join_activity - 参加活动');
-  lines.push('   params: {activityId:"xxx", activityName:"活动名"}');
-  lines.push('   重要: 从下方【可报名的活动】列表中复制"活动ID:"后面的字符串作为 activityId');
-  lines.push('   绝对禁止将活动名称填入 activityId 字段！');
-  lines.push('   【模糊查询报名流程】当用户说"帮我报名xxx的局"或类似模糊描述时：');
-  lines.push('   步骤1: 在【可报名的活动】列表中，用用户的关键词同时匹配"名称""地点""组织者"三个字段（不区分大小写，支持部分匹配）');
-  lines.push('   步骤2: 如果匹配到0个 → 回复"当前没有找到符合「xxx」的可报名活动"，列出所有可报名活动供用户参考');
-  lines.push('   步骤3: 如果匹配到1个 → 直接告知用户找到了哪个活动，并输出 join_activity 操作块（用该活动的 activityId）');
-  lines.push('   步骤4: 如果匹配到多个 → 列出所有匹配的活动（编号+名称+时间+地点+组织者），让用户选择几号，不要输出操作块');
-  lines.push('   步骤5: 用户回复选几号后 → 输出对应活动的 join_activity 操作块');
-  lines.push('');
-  lines.push('3. cancel_registration - 取消报名');
-  lines.push('   params: {activityId:"xxx", activityName:"活动名"}');
-  lines.push('   重要: 从下方【我参加的活动】列表中复制"活动ID:"后面的字符串作为 activityId');
-  lines.push('   如果你只有活动名称，把活动名填在 activityName 字段，activityId 可以留空字符串，系统会自动按名称查找');
-  lines.push('   绝对禁止将活动名称填入 activityId 字段！');
-  lines.push('');
-  lines.push('### 操作块格式（严格按此格式输出，不得修改标记符号）');
-  lines.push('回复文字...');
-  lines.push('__ACTION__{"action":"操作类型","params":{参数对象},"confirm_text":"确认操作的文字描述"}__END__');
-  lines.push('');
-  lines.push('### 正确示例');
-  lines.push('用户: 帮我创建一个周六上午的单打活动');
-  lines.push('AI: 好的，我帮你创建周六上午的单打活动。');
-  lines.push('__ACTION__{"action":"create_activity","params":{"name":"周六单打","time":"2026-05-10T09:00","location":"待定","type":"singles"},"confirm_text":"确认创建活动「周六单打」？"}__END__');
-  lines.push('');
-  lines.push('用户: 我想报名羽毛球双打活动');
-  lines.push('AI: 我找到以下可报名的活动：...');
-  lines.push('__ACTION__{"action":"join_activity","params":{"activityId":"a1b2c3d4e5","activityName":"周末双打"},"confirm_text":"确认报名参加活动「周末双打」？"}__END__');
-  lines.push('');
-  lines.push('### 约束规则');
-  lines.push('- 你有操作权限，绝对不能说"我无法操作""我不能创建""我只是AI助手"之类的话');
-  lines.push('- activityId 必须是"活动ID:"后面的纯字母数字串，绝对禁止填活动名称');
-  lines.push('- 如果用户只有活动名称无法找到ID，activityId 填空字符串 ""，把名称填在 activityName 中');
-  lines.push('- 如果可报名活动列表为空，直接告诉用户"当前没有可报名的活动"');
-  lines.push('- 信息不足时先追问，信息齐全时立即生成操作块');
-  lines.push('- 操作块必须在回复最末尾，后面不能再有文字');
-  lines.push('- 时间必须是未来时间，ISO格式如 2026-05-10T09:00');
-  lines.push('');
-  lines.push('### 模糊搜索规则（当用户说"报名XX的局"或类似模糊请求时）');
-  lines.push('【重要】你只能使用下方【可报名的活动】列表中实际存在的活动，绝对禁止编造、虚构、猜测任何活动名称！');
-  lines.push('');
-  lines.push('1. 先从【可报名的活动】中按以下维度模糊匹配（忽略大小写）：');
-  lines.push('   - 活动名称包含关键词');
-  lines.push('   - 地点包含关键词');
-  lines.push('   - 组织者名字包含关键词');
-  lines.push('2. 如果匹配到多个活动，列出所有匹配的活动供用户选择，格式如下：');
-  lines.push('   我找到了以下包含"XX"的活动：');
-  lines.push('   1. 活动名称 - 时间 - 地点 - 组织者: XXX');
-  lines.push('   2. 活动名称 - 时间 - 地点 - 组织者: XXX');
-  lines.push('   请告诉我你要报名哪一个？（不要生成操作块）');
-  lines.push('3. 如果只匹配到一个活动，直接生成操作块执行报名');
-  lines.push('4. 如果没有匹配到任何活动，必须回复："当前没有找到包含「XX」的可报名活动"，然后列出所有可报名活动供用户参考');
-  lines.push('');
-  lines.push('### 模糊搜索示例');
-  lines.push('用户: 帮我报名炽羽的局');
-  lines.push('AI: 当前没有找到包含「炽羽」的可报名活动。');
-  lines.push('目前可报名的活动有：');
-  lines.push('1. 周六测试局 - 5月30日 19:00 - XX体育馆 - 组织者: 张三');
-  lines.push('请告诉我你要报名哪个活动？');
-  lines.push('');
-  lines.push('【严禁】绝对禁止编造不存在的活动名称！如果列表中没有匹配的活动，必须如实告知用户！');
-  lines.push('');
+// COST-08: 活动列表缓存 TTL（30 秒），云函数实例复用期间避免每次全量查 50 场活动
+const ACT_CACHE_TTL_MS = 30 * 1000;
 
-  // 并行查询所有数据
-  const [userResult, pubActResult, orgActResult, regResult] = await Promise.all([
-    // 1. 用户信息
-    db.collection('users').where({ _openid: openid }).limit(1).get().catch(e => ({ data: [] })),
-    // 2. 可报名的公开活动
-    db.collection('activities').where({ status: 'registering' }).orderBy('created_at', 'desc').limit(20).get().catch(e => ({ data: [] })),
-    // 3. 我组织的活动
-    db.collection('activities').where({ organizer_id: openid }).orderBy('created_at', 'desc').limit(20).get().catch(e => ({ data: [] })),
-    // 4. 我参加的活动
-    db.collection('registrations').where({ user_id: openid, cancel_status: _.neq('approved') }).limit(50).get().catch(e => ({ data: [] }))
-  ]);
-
-  // 处理用户信息
-  const user = (userResult.data || [])[0];
-  if (user) {
-    lines.push('【用户信息】昵称：' + (user.nickname || '未知') + '，等级：' + (user.level || 5));
-    lines.push('');
+async function getActivitiesList(openid) {
+  // COST-08: 命中缓存（距上次查询不到 30 秒）直接复用
+  const now = Date.now();
+  if (global.__actCache && global.__actCache.data && now - global.__actCache.ts < ACT_CACHE_TTL_MS) {
+    return global.__actCache.data;
   }
-
-  // 处理可报名的公开活动
-  const pubActs = pubActResult.data || [];
-  if (pubActs.length > 0) {
-    // 批量查询组织者名字和报名人数
-    const organizerIds = [...new Set(pubActs.map(a => a.organizer_id).filter(Boolean))];
-    const actIds = pubActs.map(a => a._id);
-
-    const [orgUsersResult, regCountsResult] = await Promise.all([
-      organizerIds.length > 0 ? db.collection('users').where({ _openid: db.command.in(organizerIds) }).field({ _openid: true, nickname: true }).get().catch(e => ({ data: [] })) : Promise.resolve({ data: [] }),
-      // 批量查询报名人数
-      db.collection('registrations').where({ activity_id: db.command.in(actIds), cancel_status: _.neq('approved') }).field({ activity_id: true }).limit(1000).get().catch(e => ({ data: [] }))
-    ]);
-
-    const organizerNameMap = {};
-    (orgUsersResult.data || []).forEach(u => {
-      organizerNameMap[u._openid] = u.nickname || '未知';
-    });
-
-    // 统计每个活动的报名人数
-    const regCountMap = {};
-    (regCountsResult.data || []).forEach(r => {
-      regCountMap[r.activity_id] = (regCountMap[r.activity_id] || 0) + 1;
-    });
-
-    lines.push('【可报名的活动】(' + pubActs.length + '个)');
-    for (const act of pubActs) {
-      const typeCn = typeMap[act.type] || act.type || '未知';
-      const timeStr = formatTime(act.time);
-      const organizerName = organizerNameMap[act.organizer_id] || '未知';
-      const regCount = regCountMap[act._id] || 0;
-      lines.push('- 活动ID: ' + act._id);
-      lines.push('  名称: ' + (act.name || '未命名') + '，类型: ' + typeCn + '，时间: ' + timeStr + '，地点: ' + (act.location || '未知') + '，组织者: ' + organizerName + '，报名: ' + regCount + '/' + (act.max_players || '?') + '人');
-    }
-    lines.push('');
-  } else {
-    lines.push('【可报名的活动】当前无可报名活动');
-    lines.push('');
+  // COST-08: 白名单投影，不拉 openid 进 prompt；organizerId 仅用于反查昵称后丢弃
+  const res = await db.collection('activities').where({ status: 'registering' })
+    .orderBy('time', 'asc').limit(50)
+    .field({ name: 1, type: 1, time: 1, location: 1, status: 1, maxPlayers: 1, currentPlayers: 1, organizerId: 1 })
+    .get();
+  const list = res.data || [];
+  // AI-5: 批量反查组织者昵称，替换裸 organizerId
+  const orgIds = [...new Set(list.map(a => a.organizerId).filter(Boolean))];
+  let nameMap = {};
+  if (orgIds.length > 0) {
+    const usersRes = await db.collection('users').where({ openid: _.in(orgIds) }).field({ openid: 1, nickname: 1 }).get();
+    (usersRes.data || []).forEach(u => { nameMap[u.openid] = u.nickname || ''; });
   }
-
-  // 处理我组织的活动
-  const organized = orgActResult.data || [];
-  if (organized.length > 0) {
-    const orgActIds = organized.map(a => a._id);
-    const orgRegCountsResult = await db.collection('registrations')
-      .where({ activity_id: db.command.in(orgActIds), cancel_status: _.neq('approved') })
-      .field({ activity_id: true })
-      .limit(1000)
-      .get()
-      .catch(e => ({ data: [] }));
-
-    const orgRegCountMap = {};
-    (orgRegCountsResult.data || []).forEach(r => {
-      orgRegCountMap[r.activity_id] = (orgRegCountMap[r.activity_id] || 0) + 1;
-    });
-
-    lines.push('【我组织的活动】(' + organized.length + '个)');
-    for (const act of organized) {
-      const typeCn = typeMap[act.type] || act.type || '未知';
-      const statusCn = statusMap[act.status] || act.status;
-      const timeStr = formatTime(act.time);
-      const regCount = orgRegCountMap[act._id] || 0;
-      const maxCount = act.max_players || '?';
-      lines.push('- 活动ID: ' + act._id);
-      lines.push('  名称: ' + (act.name || '未命名') + '，类型: ' + typeCn + '，时间: ' + timeStr + '，地点: ' + (act.location || '未知') + '，状态: ' + statusCn + '，报名: ' + regCount + '/' + maxCount + '人');
-    }
-    lines.push('');
-  }
-
-  // 处理我参加的活动
-  const regs = regResult.data || [];
-  const myActIds = [...new Set(regs.map(r => r.activity_id))];
-
-  if (myActIds.length > 0) {
-    const myActResult = await db.collection('activities')
-      .where({ _id: db.command.in(myActIds) })
-      .orderBy('created_at', 'desc')
-      .limit(20)
-      .get()
-      .catch(e => ({ data: [] }));
-
-    const acts = (myActResult.data || []).filter(a => a.organizer_id !== openid);
-    if (acts.length > 0) {
-      const joinedActIds = acts.map(a => a._id);
-      const joinedRegCountsResult = await db.collection('registrations')
-        .where({ activity_id: db.command.in(joinedActIds), cancel_status: _.neq('approved') })
-        .field({ activity_id: true })
-        .limit(1000)
-        .get()
-        .catch(e => ({ data: [] }));
-
-      const joinedRegCountMap = {};
-      (joinedRegCountsResult.data || []).forEach(r => {
-        joinedRegCountMap[r.activity_id] = (joinedRegCountMap[r.activity_id] || 0) + 1;
-      });
-
-      lines.push('【我参加的活动】(' + acts.length + '个)');
-      for (const act of acts) {
-        const typeCn = typeMap[act.type] || act.type || '未知';
-        const statusCn = statusMap[act.status] || act.status;
-        const timeStr = formatTime(act.time);
-        const regCount = joinedRegCountMap[act._id] || 0;
-        const maxCount = act.max_players || '?';
-        lines.push('- 活动ID: ' + act._id);
-        lines.push('  名称: ' + (act.name || '未命名') + '，类型: ' + typeCn + '，时间: ' + timeStr + '，地点: ' + (act.location || '未知') + '，状态: ' + statusCn + '，报名: ' + regCount + '/' + maxCount + '人');
-      }
-      lines.push('');
-    }
-  }
-
-  // 5. 活动排名数据
-  try {
-    const orgResult2 = await db.collection('activities')
-      .where({ organizer_id: openid })
-      .field({ _id: true })
-      .limit(20)
-      .get();
-
-    const regResult2 = await db.collection('registrations')
-      .where({ user_id: openid, cancel_status: _.neq('approved') })
-      .field({ activity_id: true })
-      .limit(50)
-      .get();
-
-    const myActIds = [...new Set([
-      ...(orgResult2.data || []).map(a => a._id),
-      ...(regResult2.data || []).map(r => r.activity_id)
-    ])];
-
-    if (myActIds.length > 0) {
-      const scoresResult = await db.collection('scores')
-        .where({ activity_id: _.in(myActIds) })
-        .limit(500)
-        .get();
-
-      const scores = scoresResult.data || [];
-
-      if (scores.length > 0) {
-        const actScoreMap = {};
-        scores.forEach(s => {
-          if (!actScoreMap[s.activity_id]) actScoreMap[s.activity_id] = {};
-          if (!actScoreMap[s.activity_id][s.user_id]) {
-            actScoreMap[s.activity_id][s.user_id] = 0;
-          }
-          actScoreMap[s.activity_id][s.user_id] += s.score_change;
-        });
-
-        const actNameMap = {};
-        const actDetailResult = await db.collection('activities')
-          .where({ _id: _.in(Object.keys(actScoreMap)) })
-          .field({ _id: true, name: true })
-          .limit(20)
-          .get();
-        (actDetailResult.data || []).forEach(a => {
-          actNameMap[a._id] = a.name || '未命名';
-        });
-
-        const nickMap = {};
-        const regNickResult = await db.collection('registrations')
-          .where({ activity_id: _.in(Object.keys(actScoreMap)) })
-          .field({ user_id: true, nickname: true })
-          .limit(200)
-          .get();
-        (regNickResult.data || []).forEach(r => {
-          nickMap[r.user_id] = r.nickname || '';
-        });
-
-        lines.push('【活动排名数据】');
-        for (const actId of Object.keys(actScoreMap)) {
-          const rankings = Object.entries(actScoreMap[actId])
-            .map(([uid, score]) => ({ uid, score, name: nickMap[uid] || uid }))
-            .sort((a, b) => b.score - a.score);
-
-          lines.push('');
-          lines.push(actNameMap[actId] + '：');
-          rankings.forEach((r, i) => {
-            const sign = r.score >= 0 ? '+' : '';
-            lines.push((i + 1) + '. ' + r.name + ' ' + sign + r.score + '分');
-          });
-        }
-        lines.push('');
-      }
-    }
-  } catch (e) {
-    console.log('查询排名数据失败:', e.message);
-  }
-
-  // 6. 比赛实时数据：进行中活动的比赛状态
-  try {
-    // 查找所有进行中的活动（playing / challenge / final）
-    const activeActResult = await db.collection('activities')
-      .where({ status: _.in(['playing', 'challenge', 'final']) })
-      .field({ _id: true, name: true, status: true, type: true })
-      .limit(20)
-      .get();
-    const activeActs = activeActResult.data || [];
-
-    if (activeActs.length > 0) {
-      // 筛选出我参与的活动
-      const myRegInActive = await db.collection('registrations')
-        .where({ user_id: openid, cancel_status: _.neq('approved'), activity_id: _.in(activeActs.map(a => a._id)) })
-        .limit(50)
-        .get();
-      const myActiveActIds = [...new Set((myRegInActive.data || []).map(r => r.activity_id))];
-
-      if (myActiveActIds.length > 0) {
-        // 查找我的队伍
-        const myTeams = await db.collection('teams')
-          .where({
-            activity_id: _.in(myActiveActIds),
-            members: openid,
-            is_eliminated: _.neq(true)
-          })
-          .limit(50)
-          .get();
-
-        const myTeamIds = (myTeams.data || []).map(t => t._id);
-
-        if (myTeamIds.length > 0) {
-          // 查找我的所有比赛（team1_id 或 team2_id 在我的队伍中）
-          // 小程序云数据库不支持 _.or，分两次查再合并
-          const matchResults1 = await db.collection('matches')
-            .where({
-              activity_id: _.in(myActiveActIds),
-              round: _.in(['group', 'challenge', 'final']),
-              team1_id: _.in(myTeamIds)
-            })
-            .orderBy('round_order', 'asc')
-            .limit(100)
-            .get();
-          const matchResults2 = await db.collection('matches')
-            .where({
-              activity_id: _.in(myActiveActIds),
-              round: _.in(['group', 'challenge', 'final']),
-              team2_id: _.in(myTeamIds)
-            })
-            .orderBy('round_order', 'asc')
-            .limit(100)
-            .get();
-
-          // 合并去重
-          const matchSet = new Set();
-          const matches = [];
-          [...(matchResults1.data || []), ...(matchResults2.data || [])].forEach(m => {
-            if (!matchSet.has(m._id)) {
-              matchSet.add(m._id);
-              matches.push(m);
-            }
-          });
-          if (matches.length > 0) {
-            // 按活动分组
-            const actNameMap2 = {};
-            activeActs.forEach(a => { actNameMap2[a._id] = (a.name || '未命名') + '(' + (statusMap[a.status] || a.status) + ')'; });
-
-            // 收集所有涉及的队伍
-            const opponentTeamIds = [...new Set([
-              ...matches.filter(m => !myTeamIds.includes(m.team1_id)).map(m => m.team1_id),
-              ...matches.filter(m => !myTeamIds.includes(m.team2_id)).map(m => m.team2_id)
-            ])];
-            const allTeamIds = [...new Set([...myTeamIds, ...opponentTeamIds])];
-
-            // 批量查队伍
-            const allTeams = await db.collection('teams')
-              .where({ _id: _.in(allTeamIds) })
-              .limit(100)
-              .get();
-
-            // 批量查队员昵称：一次查所有相关活动中的 registrations
-            const allTeamMembers = [...new Set(
-              (allTeams.data || []).flatMap(t => t.members || [])
-            )];
-            let globalNickMap = {};
-            if (allTeamMembers.length > 0) {
-              const allRegs = await db.collection('registrations')
-                .where({ activity_id: _.in(myActiveActIds), user_id: _.in(allTeamMembers) })
-                .field({ user_id: true, nickname: true })
-                .limit(500)
-                .get();
-              (allRegs.data || []).forEach(r => {
-                globalNickMap[r.user_id] = r.nickname || '';
-              });
-            }
-
-            // 构建队伍名映射
-            const teamNameMap = {};
-            (allTeams.data || []).forEach(team => {
-              const nicks = (team.members || []).map(uid => globalNickMap[uid] || '?');
-              teamNameMap[team._id] = nicks.join('/');
-            });
-
-            const roundMap = { group: '小组赛', challenge: '挑战赛', final: '决赛' };
-
-            // 按活动分组
-            const actMatches = {};
-            matches.forEach(m => {
-              if (!actMatches[m.activity_id]) actMatches[m.activity_id] = [];
-              actMatches[m.activity_id].push(m);
-            });
-
-            lines.push('【我的比赛详情】');
-            for (const actId of Object.keys(actMatches)) {
-              lines.push('');
-              lines.push(actNameMap2[actId] + '：');
-
-              const played = actMatches[actId].filter(m => m.status === 'confirmed');
-              const pending = actMatches[actId].filter(m => m.status !== 'confirmed');
-
-              if (played.length > 0) {
-                lines.push('  已完成(' + played.length + '场)：');
-                played.forEach((m, i) => {
-                  const t1 = teamNameMap[m.team1_id] || '?';
-                  const t2 = teamNameMap[m.team2_id] || '?';
-                  const rd = roundMap[m.round] || m.round;
-                  lines.push('    ' + (i + 1) + '. [' + rd + '] ' + t1 + ' ' + (m.team1_score || 0) + ' : ' + (m.team2_score || 0) + ' ' + t2);
-                });
-              }
-
-              if (pending.length > 0) {
-                lines.push('  待进行(' + pending.length + '场)：');
-                pending.forEach((m, i) => {
-                  const t1 = teamNameMap[m.team1_id] || '?';
-                  const t2 = teamNameMap[m.team2_id] || '?';
-                  const rd = roundMap[m.round] || m.round;
-                  const st = m.status === 'playing' ? '(进行中)' : '(待开始)';
-                  lines.push('    ' + (i + 1) + '. [' + rd + '] ' + t1 + ' vs ' + t2 + ' ' + st);
-                });
-              }
-
-              lines.push('  共 ' + actMatches[actId].length + ' 场，已完成 ' + played.length + ' 场，剩余 ' + pending.length + ' 场');
-            }
-            lines.push('');
-          }
-        }
-      }
-    }
-  } catch (e) {
-    console.log('查询比赛实时数据失败:', e.message);
-  }
-
-  let context = lines.join('\n');
-
-  // 控制长度不超过 6000 字
-  if (context.length > 6000) {
-    context = context.substring(0, 6000) + '\n...(数据过多，已截断)';
-  }
-
-  return context;
+  const data = list.map(a => ({
+    id: a._id, name: a.name, type: a.type, time: a.time, location: a.location,
+    status: a.status, maxPlayers: a.maxPlayers, currentPlayers: a.currentPlayers,
+    organizer: nameMap[a.organizerId] || ''
+  }));
+  // COST-08: 写入全局缓存 { data, ts }
+  global.__actCache = { data: data, ts: Date.now() };
+  return data;
 }
 
-// ============================================================
-// 调用小米 Mimo API
-// ============================================================
-function callMimoAPI(messages) {
-  return new Promise((resolve, reject) => {
-    if (!MIMO_API_KEY) {
-      return reject(new Error('未配置 MIMO_API_KEY'));
-    }
-
-    const payload = JSON.stringify({
-      model: 'mimo-v2.5-pro',
-      messages: messages,
-      temperature: 0.7,
-      max_tokens: 1000
-    });
-
-    const options = {
-      hostname: 'token-plan-cn.xiaomimimo.com',
-      path: '/v1/chat/completions',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + MIMO_API_KEY,
-        'Content-Length': Buffer.byteLength(payload)
-      },
-      timeout: 30000
-    };
-
-    const req = https.request(options, res => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try {
-          const result = JSON.parse(data);
-          if (result.choices && result.choices[0]) {
-            resolve(result.choices[0].message.content);
-          } else {
-            reject(new Error('API 返回格式异常: ' + data.substring(0, 200)));
-          }
-        } catch (e) {
-          reject(new Error('解析 API 响应失败: ' + data.substring(0, 200)));
-        }
-      });
-    });
-
-    req.on('error', reject);
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error('API 请求超时'));
-    });
-    req.write(payload);
-    req.end();
-  });
-}
-
-// ============================================================
-// 主入口
-// ============================================================
 exports.main = async (event, context) => {
+  const { action = 'chat', payload = {} } = event;
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
-
-  // ============================================================
-  // TODO: 付费功能预留 - AI 使用权限校验
-  // 每个用户的 AI 功能需要付费后才能使用
-  // 实现方式（未来）：
-  //   1. 在 users 集合中增加字段：is_paid (Boolean) 或 paid_until (Date)
-  //   2. 在这里查询用户的付费状态
-  //   3. 如果未付费，返回：
-  //      return { success: false, error: 'AI功能需要开通后才能使用，请前往首页开通' };
-  //   4. 前端收到此错误后，引导用户跳转到付费开通页面
-  // 当前阶段：暂不启用，所有用户可免费使用
-  // ============================================================
-
-  // action_result: 前端操作执行后把结果反馈给 AI
-  const { message, action_result } = event;
-
-  // 如果是 action_result 反馈（不是用户输入的消息）
-  const actualMessage = action_result
-    ? ('[系统通知] 操作执行结果：' + action_result)
-    : message;
-
-  if (!actualMessage || !actualMessage.trim()) {
-    return { success: false, error: '消息内容不能为空' };
-  }
-
+  if (!openid) return { success: false, message: '未获取到用户身份，请重新进入小程序' };
+  // COST-07: 限流 20 次/分钟
+  const rl = rateLimit(openid, { limit: 20, windowMs: 60 * 1000 });
+  if (!rl.ok) return { success: false, message: '操作太频繁，请稍后再试' };
   try {
-    // 1. 保存消息（action_result 用 system 角色，避免显示在对话中）
+    // i=134：删除未被调用的 action:'history' 分支，历史统一由 ai-history 提供
+    if (action !== 'chat') return { success: false, message: '未知 action: ' + action };
+
+    // i=170：message 长度截断，避免超长输入拖垮 AI 调用
+    const rawMessage = payload.message;
+    if (!rawMessage) return { success: false, message: '消息不能为空' };
+    const message = String(rawMessage).slice(0, 2000);
+
+    const userRes = await db.collection('users').where({ openid }).limit(1).get();
+    const u = (userRes.data && userRes.data[0]) || { nickname: '球友', level: 5 };
+    const acts = await getActivitiesList(openid);
+    // AI-5: 对拼接进 SYSTEM_PROMPT 的活动名/地点/类型/昵称做清洗（不含 organizerId/openid）
+    const actLines = acts.map(a => `- 活动ID: ${sanitizeText(a.id, 40)}\n  名称: ${sanitizeText(a.name, 50)}，类型: ${sanitizeText(a.type, 20)}，时间: ${sanitizeText(a.time, 30)}，地点: ${sanitizeText(a.location, 50)}，组织者: ${sanitizeText(a.organizer, 20)}`).join('\n');
+    // i=107：用精确占位块替换，避免贪婪匹配吞掉后面的报名/取消报名操作指令
+    const ACT_LIST_PLACEHOLDER = '【可报名的活动】(N个)\n- 活动ID: ...\n  名称: ...，类型: ...，时间: ...，地点: ...，组织者: ...';
+    const system = SYSTEM_PROMPT
+      .replace('{nickname}', sanitizeText(u.nickname || '球友', 20))
+      .replace('{level}', sanitizeText(String(u.level != null ? u.level : 5), 8))
+      .replace(ACT_LIST_PLACEHOLDER, '【可报名的活动】(' + acts.length + '个)\n' + (actLines || '（暂无）'));
+
+    // i=112：取最近对话历史，随本轮消息一起传给 AI
+    const rawHistory = (payload.history && payload.history.length)
+      ? payload.history
+      : (await db.collection('ai_messages').where(_.or([{ userId: openid }, { user_id: openid }])).limit(50).get()).data || [];
+    const history = rawHistory
+      .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.content)
+      .map(m => ({ role: m.role, content: String(m.content).slice(0, 2000) }))
+      .slice(-12);
+
+    let reply;
+    try {
+      reply = await callAI(system, message, { temperature: 0.7, history });
+    } catch (e) {
+    logger.error('ai-chat', (typeof action !== 'undefined' ? action : '-'), { err: e });
+      reply = '抱歉，小羽服务异常，请稍后重试。';
+    }
+
+    // sanitizeChatReply：声称报名/取消报名成功但无操作卡片 → 改写（i=123 扩展取消报名，i=154 扩展正则 + 空列表保护）
+    const joinSuccessRe = /报名成功|已成功报名|报名已成功|报名完成|已为你报名|报名已提交|已经报名|帮你报了|已替你报名|报名好了|参加成功|已成功参加|已为你参加/;
+    const joinIntentRe = /帮我报名|我想报名|我要报名|报名参加|帮我参加|帮我报|想报名|要报名|报名|参加活动/;
+    const cancelSuccessRe = /取消成功|已取消报名|已为你取消|取消完成|已成功取消|取消已提交|已提交取消|已经取消|帮你取消|取消好了|退出成功|已退出/;
+    const cancelIntentRe = /帮我取消|我想取消|我要取消|取消报名|退出活动|取消参加|想取消|要取消|取消/;
+    const selectCards = acts.map(a => `{"id":"${sanitizeText(a.id, 40)}","name":"${sanitizeText(a.name, 50)}","time":"${sanitizeText(a.time, 30)}","location":"${sanitizeText(a.location, 50)}","organizer":"${sanitizeText(a.organizer, 20)}"}`).join(',');
+    if (!/__ACTION__/.test(reply) && !/__SELECT__/.test(reply)) {
+      if (joinSuccessRe.test(reply) && joinIntentRe.test(message)) {
+        if (acts.length === 0) {
+          reply = '我还没有替你提交报名。当前暂无可报名的活动。';
+        } else {
+          reply = '我还没有替你提交报名，请先选择要报名的活动：\n__SELECT__[' + selectCards + ']__END__';
+        }
+      } else if (cancelSuccessRe.test(reply) && cancelIntentRe.test(message)) {
+        reply = '我还没有替你提交取消报名申请。请确认要取消的活动后，我再生成取消报名确认卡片。';
+      }
+    }
+
+    // AI-35: [系统通知] 协议文本用 assistant role 持久化，不再冒充用户消息
+    const isSys = /^\[系统通知\]/.test(message);
+    // AI-20: 消息写入时带上 activityId，供 delete-activity 级联清理
+    const activityId = String(payload.activityId || '').slice(0, 64);
+
+    // AI-10: 操作卡片消息落库时记录 actionStatus/actionResultText，便于重载时恢复
+    const hasActionCard = /__ACTION__\{[\s\S]*?\}__END__/.test(reply);
+    const actionStatus = hasActionCard ? 'pending' : '';
+
     await db.collection('ai_messages').add({
-      data: {
-        user_id: openid,
-        role: action_result ? 'system_feedback' : 'user',
-        content: actualMessage,
-        created_at: db.serverDate()
-      }
+      data: { userId: openid, role: isSys ? '__system_feedback' : 'user', content: message, activityId, createdAt: db.serverDate() }
     });
-
-    // 2. 获取历史消息（最近12条，包含 system_feedback）
-    const historyResult = await db.collection('ai_messages')
-      .where({ user_id: openid })
-      .orderBy('created_at', 'desc')
-      .limit(12)
-      .get();
-
-    const history = (historyResult.data || []).reverse();
-    // system_feedback 转为 user 角色传给 AI（AI 需要知道操作结果）
-    const apiMessages = history.map(m => ({
-      role: m.role === 'system_feedback' ? 'user' : m.role,
-      content: m.content
-    }));
-
-    // 3. 构建用户数据上下文并注入
-    const userContext = await buildUserContext(openid);
-    apiMessages.unshift({
-      role: 'system',
-      content: userContext
+    const assistantAdd = await db.collection('ai_messages').add({
+      data: { userId: openid, role: 'assistant', content: reply, actionStatus, actionResultText: '', activityId, createdAt: db.serverDate() }
     });
+    const assistantMessageId = (assistantAdd && (assistantAdd.id || assistantAdd._id)) || '';
 
-    // 4. 调用 AI API
-    const aiReply = await callMimoAPI(apiMessages);
-
-    // 5. 保存 AI 回复（含 action block 原文，前端自行解析）
-    await db.collection('ai_messages').add({
-      data: {
-        user_id: openid,
-        role: 'assistant',
-        content: aiReply,
-        created_at: db.serverDate()
+    // AI-6/PERF-22: 最小读放大清理旧消息——count 超限时只读最老的 excess 条并删除
+    const MAX_AI_MESSAGES = 50;
+    const userWhere = _.or([{ userId: openid }, { user_id: openid }]);
+    const countRes = await db.collection('ai_messages').where(userWhere).count();
+    if (countRes && countRes.total > MAX_AI_MESSAGES) {
+      const excess = countRes.total - MAX_AI_MESSAGES;
+      const oldest = await db.collection('ai_messages')
+        .where(userWhere)
+        .orderBy('createdAt', 'asc')
+        .limit(excess)
+        .get();
+      for (const m of (oldest.data || [])) {
+        await db.collection('ai_messages').doc(m._id).remove();
       }
-    });
+    }
 
-    return {
-      success: true,
-      data: {
-        content: aiReply
-      }
-    };
+    return { success: true, data: { reply: reply, content: reply, actionStatus: actionStatus, assistantMessageId: assistantMessageId }, message: 'ok' };
   } catch (err) {
-    console.error('AI 聊天失败:', err);
-    return {
-      success: false,
-      error: err.message || 'AI 服务异常，请稍后重试'
-    };
+    logger.error('ai-chat', (typeof action !== 'undefined' ? action : '-'), { err: err });
+    return { success: false, message: err.message || '对话失败' };
   }
 };

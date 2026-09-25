@@ -1,60 +1,64 @@
 /**
- * deleteActivity 云函数 - 删除活动
+ * delete-activity 云函数 - 删除活动（级联）
+ * 对齐 ActivityServiceImpl.deleteActivity，仅组织者
+ * payload: { activityId }
  */
-
 const cloud = require('wx-server-sdk');
 
-cloud.init({
-  env: cloud.DYNAMIC_CURRENT_ENV
-});
+const logger = require('./logger');
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const db = cloud.database();
 const _ = db.command;
 
 exports.main = async (event, context) => {
+  const { action = 'delete', payload = {} } = event;
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
-  
-  const { activityId } = event;
-  
-  console.log('deleteActivity 被调用, activityId:', activityId, 'openid:', openid);
-  
-  if (!activityId) {
-    return { success: false, error: '活动ID不能为空' };
-  }
-  
   try {
-    const activityResult = await db.collection('activities').doc(activityId).get();
-    console.log('活动查询结果:', activityResult.data);
-    
-    if (!activityResult.data) {
-      return { success: false, error: '活动不存在' };
+    if (action !== 'delete') return { success: false, message: '未知 action: ' + action };
+    const { activityId } = payload;
+    if (!activityId) return { success: false, message: 'activityId 不能为空' };
+    const actRes = await db.collection('activities').doc(activityId).get();
+    if (!actRes.data) return { success: false, message: '活动不存在' };
+    if (actRes.data.organizerId !== openid) return { success: false, message: '仅组织者可删除' };
+
+    const collections = ['scores', 'matches', 'teams', 'registrations', 'rating_changes', 'badges', 'photos', 'photo_likes', 'photo_comments', 'activity_courts', 'court_assignments', 'match_live_states', 'ai_messages', 'activity_copy', 'activity_settings'];
+    // COST-14: 先收集照片云文件，库删完后一并删除存储
+    const photoFiles = [];
+    try {
+      const phRes = await db.collection('photos').where({ activityId }).get();
+      (phRes.data || []).forEach(p => {
+        if (p.fileID) photoFiles.push(p.fileID);
+        if (p.thumbFileID) photoFiles.push(p.thumbFileID);
+      });
+    } catch (e) {
+    logger.error('delete-activity', (typeof action !== 'undefined' ? action : '-'), { err: e }); /* photos 集合可能不存在 */ }
+    for (const c of collections) {
+      try {
+        if (c === 'photo_likes' || c === 'photo_comments') {
+          const photoIds = await db.collection('photos').where({ activityId }).get();
+          for (const p of (photoIds.data || [])) {
+            await db.collection(c).where({ photoId: p._id }).remove();
+          }
+        } else {
+          await db.collection(c).where({ activityId }).remove();
+        }
+      } catch (e) {
+    logger.error('delete-activity', (typeof action !== 'undefined' ? action : '-'), { err: e }); /* 集合不存在或无数据，跳过 */ }
     }
-    
-    const activity = activityResult.data;
-    
-    if (activity.organizer_id !== openid) {
-      return { success: false, error: '只有组织者才能删除活动' };
-    }
-    
-    if (activity.status !== 'registering') {
-      return { success: false, error: '只能删除报名中的活动' };
-    }
-    
-    console.log('开始删除活动...');
-    
     await db.collection('activities').doc(activityId).remove();
-    console.log('活动已删除');
-    
-    await db.collection('registrations').where({
-      activity_id: activityId
-    }).remove();
-    console.log('报名记录已删除');
-    
-    console.log('删除完成');
-    return { success: true };
+    if (photoFiles.length > 0) {
+      try {
+        for (let i = 0; i < photoFiles.length; i += 50) {
+          await cloud.deleteFile({ fileList: photoFiles.slice(i, i + 50) });
+        }
+      } catch (e) {
+    logger.error('delete-activity', (typeof action !== 'undefined' ? action : '-'), { err: e }); /* 删除存储失败不回滚库删除 */ }
+    }
+    return { success: true, data: { activityId }, message: '删除成功' };
   } catch (err) {
-    console.error('删除失败:', err);
-    return { success: false, error: err.message || '删除失败' };
+    logger.error('delete-activity', (typeof action !== 'undefined' ? action : '-'), { err: err });
+    return { success: false, message: err.message || '删除失败' };
   }
 };

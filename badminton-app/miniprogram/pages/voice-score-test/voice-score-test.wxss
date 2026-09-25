@@ -1,0 +1,23 @@
+.voice-page { padding: 24rpx; min-height: 100vh; }
+.detail-section { background: rgba(255,255,255,0.96); padding: 30rpx 26rpx; border-radius: 30rpx; margin-bottom: 24rpx; border: 1rpx solid rgba(18,69,51,0.06); box-shadow: 0 8rpx 24rpx rgba(0,0,0,0.04); }
+.section-title { display: block; font-size: 32rpx; font-weight: 700; color: #12332b; margin-bottom: 20rpx; }
+.record-area { text-align: center; padding: 40rpx 0; }
+.record-btn { width: 160rpx; height: 160rpx; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 60rpx; border: none; }
+.record-btn.idle { background: linear-gradient(135deg,#0ea56b 0%,#0bc278 100%); color: #fff; }
+.record-btn.recording { background: linear-gradient(135deg,#d64545 0%,#ee0a24 100%); color: #fff; animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(214,69,69,0.4)} 50%{box-shadow:0 0 0 20rpx rgba(214,69,69,0)} }
+.record-status { font-size: 28rpx; color: #12332b; margin-top: 20rpx; }
+.record-duration { font-size: 48rpx; font-weight: 800; color: #12332b; margin-top: 12rpx; }
+.text-input-area { margin-top: 24rpx; }
+.text-input { width: 100%; min-height: 120rpx; border: 2rpx solid rgba(18,69,51,0.12); border-radius: 16rpx; padding: 20rpx; font-size: 28rpx; }
+.btn-parse { width: 100%; height: 88rpx; line-height: 88rpx; text-align: center; border-radius: 999rpx; font-size: 30rpx; font-weight: 700; background: linear-gradient(135deg,#0ea56b 0%,#0bc278 100%); color: #fff; border: none; margin-top: 20rpx; }
+.btn-parse:disabled { opacity: 0.5; }
+.result-card { padding: 24rpx; border-radius: 24rpx; background: linear-gradient(135deg,#f7fbf9 0%,#f1f7f4 100%); border: 1rpx solid rgba(18,69,51,0.05); margin-top: 20rpx; }
+.result-row { display: flex; justify-content: space-between; align-items: center; padding: 12rpx 0; }
+.result-label { font-size: 26rpx; color: #8d9a95; }
+.result-value { font-size: 28rpx; font-weight: 600; color: #12332b; }
+.confidence-high { color: #0a7d52; }
+.confidence-low { color: #d64545; }
+.btn-submit { width: 100%; height: 88rpx; line-height: 88rpx; text-align: center; border-radius: 999rpx; font-size: 30rpx; font-weight: 700; background: linear-gradient(135deg,#f6a53b 0%,#ee8f1d 100%); color: #fff; border: none; margin-top: 16rpx; }
+.btn-retry { width: 100%; height: 88rpx; line-height: 88rpx; text-align: center; border-radius: 999rpx; font-size: 30rpx; font-weight: 700; background: rgba(244,247,246,0.96); color: #12332b; border: 2rpx solid rgba(18,69,51,0.12); margin-top: 12rpx; }
+.need-review-tip { padding: 16rpx 24rpx; border-radius: 16rpx; background: linear-gradient(135deg,#fff6e8 0%,#ffecc4 100%); color: #c98517; font-size: 26rpx; text-align: center; margin-top: 12rpx; }

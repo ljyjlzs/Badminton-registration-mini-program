@@ -6,10 +6,33 @@
     "pages/create-activity/create-activity",
     "pages/activity-detail/activity-detail",
     "pages/grouping/grouping",
+    "pages/court-detail/court-detail",
+    "pages/court-list/court-list",
     "pages/match-score/match-score",
     "pages/ranking/ranking",
-    "pages/challenge/challenge",
-    "pages/rules/rules"
+    "pages/rules/rules",
+    "pages/rules-qa/rules-qa",
+    "pages/profile/profile",
+    "pages/report/report",
+    "pages/settings/settings",
+    "pages/weather/weather",
+    "pages/voice-score-test/voice-score-test",
+    "pages/photo-album/photo-album",
+    "pages/photo-detail/photo-detail",
+    "pages/ai-activity-create/ai-activity-create",
+    "pages/invite-candidates/invite-candidates",
+    "pages/recommend-time/recommend-time",
+    "pages/my-summary/my-summary",
+    "pages/schedule/schedule",
+    "pages/activity-report/activity-report",
+    "pages/invite/invite",
+    "pages/grouping-preview/grouping-preview",
+    "pages/fill-suggestion/fill-suggestion",
+    "pages/court-assign/court-assign",
+    "pages/ai-feature/ai-feature",
+    "pages/ai-note-preview/ai-note-preview",
+    "pages/privacy/privacy",
+    "pages/agreement/agreement"
   ],
   "window": {
     "backgroundTextStyle": "dark",
@@ -52,5 +75,6 @@
     "chooseLocation"
   ],
   "sitemapLocation": "sitemap.json",
-  "style": "v2"
+  "style": "v2",
+  "lazyCodeLoading": "requiredComponents"
 }

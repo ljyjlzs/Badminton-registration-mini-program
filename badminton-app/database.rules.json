@@ -1,0 +1,82 @@
+{
+  "read": "auth.openid != null",
+  "write": "auth.openid != null",
+  "collections": {
+    "users": {
+      "read": true,
+      "create": "doc.openid == auth.openid",
+      "update": "doc.openid == auth.openid",
+      "delete": "doc.openid == auth.openid"
+    },
+    "activities": {
+      "read": true,
+      "create": "doc.organizerId == auth.openid",
+      "update": "doc.organizerId == auth.openid",
+      "delete": "doc.organizerId == auth.openid"
+    },
+    "registrations": {
+      "read": true,
+      "create": "doc.userId == auth.openid",
+      "update": "doc.userId == auth.openid || doc.applyStatus == 'pending' || doc.cancelStatus == 'pending'",
+      "delete": false
+    },
+    "teams": {
+      "read": true,
+      "create": "doc.captainId == auth.openid",
+      "update": "doc.captainId == auth.openid",
+      "delete": "doc.captainId == auth.openid"
+    },
+    "matches": {
+      "read": true,
+      "create": false,
+      "update": false,
+      "delete": false
+    },
+    "scores": {
+      "read": true,
+      "create": "doc.userId == auth.openid",
+      "update": "doc.userId == auth.openid",
+      "delete": false
+    },
+    "photos": {
+      "read": true,
+      "create": "doc.uploadedBy == auth.openid",
+      "update": "doc.uploadedBy == auth.openid",
+      "delete": "doc.uploadedBy == auth.openid"
+    },
+    "photo_comments": {
+      "read": true,
+      "create": "doc.userId == auth.openid",
+      "update": false,
+      "delete": "doc.userId == auth.openid"
+    },
+    "ai_messages": {
+      "read": "doc.userId == auth.openid",
+      "create": "doc.userId == auth.openid",
+      "update": false,
+      "delete": "doc.userId == auth.openid"
+    },
+    "rules": {
+      "read": true,
+      "write": false
+    },
+    "activity_copy": {
+      "read": true,
+      "create": "auth.openid != null",
+      "update": "auth.openid != null",
+      "delete": false
+    },
+    "activity_courts": {
+      "read": true,
+      "create": "auth.openid != null",
+      "update": "auth.openid != null",
+      "delete": false
+    },
+    "court_assignments": {
+      "read": true,
+      "create": "auth.openid != null",
+      "update": "auth.openid != null",
+      "delete": false
+    }
+  }
+}

@@ -1,0 +1,78 @@
+<view class="invite-page">
+  <view class="invite-hero">
+    <view class="hero-copy">
+      <view class="hero-badge">SMART INVITE</view>
+      <view class="hero-title">智能邀约</view>
+      <view class="hero-desc">从你过往活动里，推荐经常一起打的球友</view>
+    </view>
+    <view class="hero-count">
+      <text class="count-num">{{selectedCount}}</text>
+      <text class="count-label">已选 / 10</text>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading invite-loading">
+    <view class="loading-spinner"></view>
+    <text>加载候选球友...</text>
+  </view>
+
+  <block wx:elif="{{candidates.length === 0}}">
+    <view class="empty-tip">
+      <text class="empty-icon">🏸</text>
+      <text class="empty-text">暂无推荐候选</text>
+      <text class="empty-desc">可先分享活动链接，等球友报名后再来生成邀约。</text>
+    </view>
+    <view class="share-bar">
+      <button class="btn-share" bindtap="shareLink">分享活动链接</button>
+    </view>
+  </block>
+
+  <block wx:else>
+    <view class="candidate-list">
+      <view wx:for="{{candidates}}" wx:key="userId"
+        class="candidate-card {{selectedMap[item.userId] ? 'selected' : ''}}"
+        data-id="{{item.userId}}" bindtap="toggleCandidate">
+        <view class="candidate-avatar">{{item.avatarText}}</view>
+        <view class="candidate-copy">
+          <view class="candidate-name-row">
+            <text class="candidate-name">{{item.nickname}}</text>
+            <text class="level-tag">Lv.{{item.level || '-'}}</text>
+          </view>
+          <text class="candidate-reason">{{item.reason}}</text>
+          <text class="candidate-meta">
+            水平分 {{item.ratingText}} · 最近参与 {{item.lastJoinTimeText || '—'}}
+          </text>
+        </view>
+        <view class="check-mark">{{selectedMap[item.userId] ? '✓' : ''}}</view>
+      </view>
+    </view>
+
+    <view class="invite-actions">
+      <button
+        wx:if="{{aiEnabled}}"
+        class="btn-generate {{generating ? 'disabled' : ''}}"
+        bindtap="generateInvites"
+        disabled="{{generating}}">
+        {{generating ? '生成中...' : '生成邀请语'}}
+      </button>
+      <view wx:else class="generate-off-tip">AI 未开启，暂不支持生成邀请语，可手动复制文案。</view>
+    </view>
+
+    <view wx:if="{{invites.length > 0}}" class="invite-list">
+      <view class="invite-head">
+        <view>
+          <view class="section-title">邀请语</view>
+          <view class="section-caption">长按或点击复制，发给对应球友</view>
+        </view>
+        <view wx:if="{{inviteSource === 'template'}}" class="template-tag">已用模板文案</view>
+      </view>
+      <view wx:for="{{invites}}" wx:key="userId" class="invite-item">
+        <view class="invite-content">
+          <text class="invite-name">{{item.nickname}}</text>
+          <text class="invite-text" selectable>{{item.content}}</text>
+        </view>
+        <button class="btn-copy" data-content="{{item.content}}" bindtap="copyInvite">复制</button>
+      </view>
+    </view>
+  </block>
+</view>

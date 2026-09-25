@@ -1,226 +1,336 @@
-/**
- * getActivityDetail 云函数 - 获取活动详情
- */
-
 const cloud = require('wx-server-sdk');
+const logger = require('./logger');
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
+var db = cloud.database();
+var _ = db.command;
 
-cloud.init({
-  env: cloud.DYNAMIC_CURRENT_ENV
-});
-
-const db = cloud.database();
-
-exports.main = async (event, context) => {
-  const wxContext = cloud.getWXContext();
-  const openid = wxContext.OPENID;
-  
-  const { activityId } = event;
-  
-  if (!activityId) {
-    return {
-      success: false,
-      error: '活动ID不能为空'
-    };
-  }
-  
+exports.main = async function(event, context) {
+  var action = event.action || 'detail';
+  var payload = event.payload || {};
+  var wxContext = cloud.getWXContext();
+  var openid = wxContext.OPENID;
   try {
-    // 获取活动
-    const activityResult = await db.collection('activities').doc(activityId).get();
-    
-    if (!activityResult.data) {
-      return {
-        success: false,
-        error: '活动不存在'
-      };
-    }
-    
-    const activity = activityResult.data;
-    
-    // 获取报名列表（排除已取消的）
-    const registrationsResult = await db.collection('registrations')
-      .where({
-        activity_id: activityId,
-        cancel_status: db.command.neq('approved')
-      })
-      .get();
+    if (action !== 'detail') return { success: false, message: '未知 action: ' + action };
+    var activityId = payload.activityId;
+    if (!activityId) return { success: false, message: 'activityId 不能为空' };
 
-    const isSingles = activity.type === 'singles';
-    const isFixedDoubles = activity.type === 'fixed-doubles';
-    
-    // 获取用户信息
-    const userIds = (registrationsResult.data || []).map(r => r.user_id);
-    let usersMap = {};
-    
-    if (userIds.length > 0) {
-      const usersResult = await db.collection('users')
-        .where({
-          _openid: db.command.in(userIds)
-        })
-        .get();
-      
-      (usersResult.data || []).forEach(user => {
-        usersMap[user._openid] = user;
-      });
-    }
-    
-    // 组合报名信息
-    const registrations = (registrationsResult.data || []).map(reg => ({
-      ...reg,
-      nickname: reg.nickname || usersMap[reg.user_id]?.nickname || '未知用户',
-      avatar: reg.avatar || usersMap[reg.user_id]?.avatar || '',
-      level: reg.level,
-      partner_id: reg.partner_id || null,
-      cancel_status: reg.cancel_status || null
-    }));
+    // PERF-04: activities 先发起，与后续只依赖 activityId 的查询并行
+    var actPromise = db.collection('activities').doc(activityId).get();
 
-    // 统计待处理取消请求数
-    const pendingCancelCount = (registrationsResult.data || []).filter(
-      r => r.cancel_status === 'pending'
-    ).length;
+    // PERF-19: fields 为非空数组时，只返回这些顶层字段（轻量路径，跳过 teams/matches/photos 等重查询）
+    var fields = payload.fields;
+    var wantFields = Array.isArray(fields) && fields.length > 0;
+    if (wantFields) {
+      var needRegs = fields.indexOf('registrations') !== -1
+        || fields.indexOf('userRegistration') !== -1
+        || fields.indexOf('waitlist') !== -1
+        || fields.indexOf('agentRegistrations') !== -1
+        || fields.indexOf('stats') !== -1
+        || fields.indexOf('pendingCancelCount') !== -1;
+      var needTeams = fields.indexOf('teams') !== -1 || fields.indexOf('matches') !== -1;
+      var needMatches = fields.indexOf('matches') !== -1 || fields.indexOf('matchesSummary') !== -1 || fields.indexOf('globalBanner') !== -1;
+      var needAlbum = fields.indexOf('album') !== -1;
 
-    // 构建报名昵称和头像映射
-    const regNicknames = {};
-    const regAvatars = {};
-    registrations.forEach(reg => {
-      regNicknames[reg.user_id] = reg.nickname;
-      regAvatars[reg.user_id] = reg.avatar;
-    });
-    
-    // 为报名记录添加搭档昵称
-    registrations.forEach(reg => {
-      if (reg.partner_id && regNicknames[reg.partner_id]) {
-        reg.partner_nickname = regNicknames[reg.partner_id];
-      }
-    });
+      // PERF-04: 轻量路径互不依赖查询并行；photos 为可选查询，失败降级 null 不致整页报错
+      var lightRound = await Promise.all([
+        actPromise,
+        needRegs ? db.collection('registrations').where({ activityId: activityId }).get() : null,
+        needAlbum ? db.collection('photos').where({ activityId: activityId }).count().catch(function() { return null; }) : null,
+        needAlbum ? db.collection('photos').where({ activityId: activityId }).orderBy('createdAt', 'desc').limit(1).get().catch(function() { return null; }) : null
+      ]);
+      var actRes = lightRound[0];
+      if (!actRes.data) return { success: false, message: '活动不存在' };
+      var activity = actRes.data;
+      var isOrganizer = activity.organizerId === openid;
 
-    // 获取当前用户的报名记录
-    const userRegistration = registrations.find(r => r.user_id === openid);
-    
-    let matches = [];
-    let teams = [];
-    
-    if (activity.status !== 'registering') {
-      const matchesResult = await db.collection('matches')
-        .where({
-          activity_id: activityId
-        })
-        .get();
-      
-      const teamIds = new Set();
-      (matchesResult.data || []).forEach(m => {
-        if (m.team1_id) teamIds.add(m.team1_id);
-        if (m.team2_id) teamIds.add(m.team2_id);
-      });
-      
-      let teamsMap = {};
-      if (teamIds.size > 0) {
-        const teamsResult = await db.collection('teams')
-          .where({
-            _id: db.command.in([...teamIds])
-          })
-          .get();
-        
-        (teamsResult.data || []).forEach(team => {
-          teamsMap[team._id] = team;
-        });
-        
-        teams = Object.values(teamsMap).map(team => ({
-          _id: team._id,
-          name: team.name || '待命名队伍',
-          captain_id: team.captain_id,
-          members: (team.members || []).map(m => regNicknames[m] || m).join(' / ') || '',
-          memberAvatars: (team.members || []).map(m => regAvatars[m] || ''),
-          total_level: team.total_level || 0
-        }));
-      }
-      
-      matches = (matchesResult.data || []).map(match => {
-        const team1 = teamsMap[match.team1_id] || {};
-        const team2 = teamsMap[match.team2_id] || {};
-        
-        const team1Members = team1.members || [];
-        const team2Members = team2.members || [];
-        
-        let team1Display, team2Display;
-        
-        if (isSingles) {
-          team1Display = team1Members.length > 0 ? (regNicknames[team1Members[0]] || team1Members[0] || '选手1') : '选手1';
-          team2Display = team2Members.length > 0 ? (regNicknames[team2Members[0]] || team2Members[0] || '选手2') : '选手2';
-        } else {
-          team1Display = team1.name || '队伍1';
-          team2Display = team2.name || '队伍2';
-        }
-        
-        return {
-          ...match,
-          team1_name: team1Display,
-          team2_name: team2Display,
-          team1_totalLevel: team1.total_level || 0,
-          team2_totalLevel: team2.total_level || 0,
-          team1_members: team1Members.map(m => regNicknames[m] || m).join(' / ') || '',
-          team2_members: team2Members.map(m => regNicknames[m] || m).join(' / ') || ''
-        };
-      });
-    }
-    
-    // 根据比赛状态自动计算活动状态
-    if (activity.status !== 'registering' && matches.length > 0) {
-      const hasPlaying = matches.some(m => m.status === 'playing' || m.status === 'confirming');
-      const allGroupConfirmed = matches.filter(m => m.round === 'group').every(m => m.status === 'confirmed');
-      const allChallengeConfirmed = matches.filter(m => m.round === 'challenge').every(m => m.status === 'confirmed');
-      const allFinalConfirmed = matches.filter(m => m.round === 'final').every(m => m.status === 'confirmed');
-      const hasChallenge = matches.some(m => m.round === 'challenge');
-      const hasFinal = matches.some(m => m.round === 'final');
-      const hasGroup = matches.some(m => m.round === 'group');
-      
-      if (activity.status === 'grouping') {
-        if (hasPlaying) {
-          activity.status = 'playing';
-        }
-      } else if (activity.status === 'playing') {
-        if (hasChallenge && allGroupConfirmed && !hasPlaying) {
-          activity.status = 'playing';
-        }
-      } else if (activity.status === 'challenge') {
-        if (hasFinal) {
-          if (allFinalConfirmed && !hasPlaying) {
-            activity.status = 'finished';
-          } else {
-            activity.status = 'final';
+      var lightRegList = [];
+      var lightUserReg = null;
+      if (needRegs && lightRound[1]) {
+        lightRegList = lightRound[1].data || [];
+        for (var lr = 0; lr < lightRegList.length; lr++) {
+          if (lightRegList[lr].userId === openid && lightRegList[lr].cancelStatus !== 'approved') {
+            lightUserReg = lightRegList[lr];
+            break;
           }
         }
-      } else if (activity.status === 'final') {
-        if (allFinalConfirmed && !hasPlaying) {
-          activity.status = 'finished';
+      }
+
+      var lightDetail = {
+        activity: {
+          id: activity._id,
+          name: activity.name,
+          time: activity.time,
+          location: activity.location,
+          province: activity.province,
+          city: activity.city,
+          district: activity.district,
+          type: activity.type,
+          status: activity.status,
+          maxPlayers: activity.maxPlayers,
+          minPlayers: activity.minPlayers,
+          currentPlayers: activity.currentPlayers,
+          courtCount: activity.courtCount,
+          playersPerCourt: activity.playersPerCourt,
+          organizerId: activity.organizerId,
+          latitude: activity.latitude != null ? activity.latitude : null,
+          longitude: activity.longitude != null ? activity.longitude : null,
+          joinCode: activity.joinCode || '',
+          albumTitle: activity.albumTitle || '',
+          albumNote: activity.albumNote || ''
+        },
+        isOrganizer: isOrganizer
+      };
+      if (fields.indexOf('userRegistration') !== -1) {
+        lightDetail.userRegistration = lightUserReg ? {
+          id: lightUserReg._id, userId: lightUserReg.userId,
+          nickname: lightUserReg.nickname, avatar: lightUserReg.avatar,
+          level: lightUserReg.level, partnerId: lightUserReg.partnerId,
+          partnerNickname: '', agentUserId: lightUserReg.agentUserId,
+          agentNickname: '', agentPhone: lightUserReg.agentPhone || '',
+          teamId: lightUserReg.teamId,
+          applyStatus: lightUserReg.applyStatus, cancelStatus: lightUserReg.cancelStatus,
+          waitlistOrder: lightUserReg.waitlistOrder
+        } : null;
+      }
+      if (needAlbum) {
+        var lightAlbum = null;
+        try {
+          var lcnt = lightRound[2];
+          var ltop = lightRound[3];
+          if (lcnt && ltop) {
+            var lt = (ltop.data && ltop.data[0]) || null;
+            lightAlbum = {
+              photoCount: lcnt.total,
+              coverUrl: lt ? (lt.thumbUrl || lt.url || lt.fileID || null) : null,
+              title: activity.albumTitle || '',
+              note: activity.albumNote || ''
+            };
+          }
+        } catch (e) {}
+        lightDetail.album = lightAlbum;
+      }
+      // 只保留 fields 里列出的顶层键
+      var filtered = {};
+      for (var fi = 0; fi < fields.length; fi++) {
+        var key = fields[fi];
+        if (Object.prototype.hasOwnProperty.call(lightDetail, key)) {
+          filtered[key] = lightDetail[key];
         }
-      } else if (activity.status === 'finished') {
-        // keep finished
-      } else {
-        if (hasPlaying) {
-          activity.status = 'playing';
-        } else if (hasFinal && allFinalConfirmed) {
-          activity.status = 'finished';
-        }
+      }
+      return { success: true, data: filtered, message: 'ok' };
+    }
+
+    // PERF-04：activities/registrations/teams/matches 互不依赖，并行查询
+    var firstRound = await Promise.all([
+      actPromise,
+      db.collection('registrations').where({ activityId: activityId }).get(),
+      db.collection('teams').where({ activityId: activityId }).get(),
+      db.collection('matches').where({ activityId: activityId }).get()
+    ]);
+    var actRes = firstRound[0];
+    if (!actRes.data) return { success: false, message: '活动不存在' };
+    var activity = actRes.data;
+    var isOrganizer = activity.organizerId === openid;
+    var regs = firstRound[1];
+    var teams = firstRound[2];
+    var matches = firstRound[3];
+    var regList = regs.data || [];
+    var waitlist = regList.filter(function(r) { return r.applyStatus === 'waiting' && r.cancelStatus !== 'approved'; });
+    var actives = regList.filter(function(r) { return r.applyStatus === 'active' && r.cancelStatus !== 'approved'; });
+
+    var regMap = {};
+    regList.forEach(function(r) { regMap[r.userId] = r; });
+    var teamMap = {};
+    (teams.data || []).forEach(function(t) { teamMap[t._id] = t; });
+
+    // Build nickname lookup for agent/partner display
+    var allUserIds = [];
+    regList.forEach(function(r) {
+      if (r.agentUserId && allUserIds.indexOf(r.agentUserId) === -1) allUserIds.push(r.agentUserId);
+      if (r.partnerId && allUserIds.indexOf(r.partnerId) === -1) allUserIds.push(r.partnerId);
+    });
+    var userNickMap = {};
+
+    function memberNames(members) {
+      return (members || []).map(function(uid) { return (regMap[uid] && regMap[uid].nickname) || uid; }).join('、');
+    }
+    function totalLevel(members) {
+      return (members || []).reduce(function(sum, uid) {
+        return sum + ((regMap[uid] && regMap[uid].level) || 5);
+      }, 0);
+    }
+
+    var userReg = null;
+    for (var i = 0; i < regList.length; i++) {
+      if (regList[i].userId === openid && regList[i].cancelStatus !== 'approved') {
+        userReg = regList[i];
+        break;
       }
     }
-    
-    return {
-      success: true,
-      data: {
-        activity,
-        registrations,
-        matches,
-        teams,
-        userRegistration,
-        isOrganizer: activity.organizer_id === openid,
-        pendingCancelCount
-      }
+    var pendingCancelCount = actives.filter(function(r) { return r.cancelStatus === 'pending'; }).length;
+
+    // Album summary
+    var album = null;
+    var albumViewer = isOrganizer || (userReg && (userReg.applyStatus === 'active' || userReg.applyStatus === 'waiting'));
+
+    // 第二轮：users（依赖 regs）与 photos（依赖 userReg）并行；各自 try/catch 容错，可选查询失败不致整页报错
+    await Promise.all([
+      (async function() {
+        if (allUserIds.length === 0) return;
+        try {
+          var usersRes = await db.collection('users').where({ openid: _.in(allUserIds) }).get();
+          (usersRes.data || []).forEach(function(u) { userNickMap[u.openid] = u.nickname || ''; });
+        } catch (e) {}
+      })(),
+      (async function() {
+        if (!albumViewer) return;
+        try {
+          // PERF-09/23 + COST-09：count + 最新 1 张，替代整表 get + 内存 sort
+          var cntRes = await db.collection('photos').where({ activityId: activityId }).count();
+          var topRes = await db.collection('photos').where({ activityId: activityId }).orderBy('createdAt', 'desc').limit(1).get();
+          var top = (topRes.data && topRes.data[0]) || null;
+          album = {
+            photoCount: cntRes.total,
+            coverUrl: top ? (top.thumbUrl || top.url || top.fileID || null) : null,
+            title: activity.albumTitle || '',
+            note: activity.albumNote || ''
+          };
+        } catch (e) {}
+      })()
+    ]);
+
+    // Global banner
+    var matchList = matches.data || [];
+    var playingMatch = null;
+    var nextMatch = null;
+    for (var j = 0; j < matchList.length; j++) {
+      if (matchList[j].status === 'playing') { playingMatch = matchList[j]; break; }
+    }
+    for (var k = 0; k < matchList.length; k++) {
+      if (matchList[k].status === 'pending') { nextMatch = matchList[k]; break; }
+    }
+    var globalBanner = {
+      currentText: playingMatch ? ('场地' + (playingMatch.court || '') + ' 比赛中') : '',
+      nextText: nextMatch ? ('第' + (nextMatch.roundOrder || '') + '场 即将开始') : ''
     };
+
+    function regVO(r) {
+      return {
+        id: r._id,
+        userId: r.userId,
+        nickname: r.nickname,
+        avatar: r.avatar,
+        level: r.level,
+        partnerId: r.partnerId,
+        partnerNickname: r.partnerId ? (userNickMap[r.partnerId] || '') : '',
+        agentUserId: r.agentUserId,
+        agentNickname: r.agentUserId ? (userNickMap[r.agentUserId] || '') : '',
+        agentPhone: r.agentPhone || '',
+        teamId: r.teamId,
+        applyStatus: r.applyStatus,
+        cancelStatus: r.cancelStatus,
+        waitlistOrder: r.waitlistOrder
+      };
+    }
+
+    // Agent registrations (current user is the agent)
+    var agentRegistrations = regList.filter(function(r) {
+      return r.agentUserId === openid && r.cancelStatus !== 'approved';
+    }).map(function(r) {
+      return {
+        id: r._id,
+        nickname: r.nickname,
+        level: r.level,
+        cancelStatus: r.cancelStatus,
+        applyStatus: r.applyStatus,
+        agentPhone: r.agentPhone || ''
+      };
+    });
+
+    var detail = {
+      activity: {
+        id: activity._id,
+        name: activity.name,
+        time: activity.time,
+        location: activity.location,
+        province: activity.province,
+        city: activity.city,
+        district: activity.district,
+        type: activity.type,
+        status: activity.status,
+        maxPlayers: activity.maxPlayers,
+        minPlayers: activity.minPlayers,
+        currentPlayers: activity.currentPlayers,
+        courtCount: activity.courtCount,
+        playersPerCourt: activity.playersPerCourt,
+        organizerId: activity.organizerId,
+        latitude: activity.latitude != null ? activity.latitude : null,
+        longitude: activity.longitude != null ? activity.longitude : null,
+        joinCode: activity.joinCode || '',
+        // AI-16: 相册标题/说明随 activity 返回，修复 photo-album 读路径
+        albumTitle: activity.albumTitle || '',
+        albumNote: activity.albumNote || ''
+      },
+      isOrganizer: isOrganizer,
+      registrations: actives.map(function(r) { return regVO(r); }),
+      agentRegistrations: agentRegistrations,
+      stats: {
+        activeCount: actives.length,
+        waitingCount: waitlist.length,
+        maxPlayers: activity.maxPlayers,
+        minPlayers: activity.minPlayers,
+        currentPlayers: activity.currentPlayers,
+        type: activity.type,
+        courtCount: activity.courtCount,
+        playersPerCourt: activity.playersPerCourt
+      },
+      matchesSummary: {
+        total: matchList.length,
+        finished: matchList.filter(function(m) { return m.status === 'finished'; }).length
+      },
+      teams: (teams.data || []).map(function(t) { return { id: t._id, name: t.name, members: t.members }; }),
+      matches: matchList.map(function(m) {
+        var t1 = teamMap[m.team1Id] || {};
+        var t2 = teamMap[m.team2Id] || {};
+        return {
+          _id: m._id,
+          id: m._id,
+          team1Id: m.team1Id,
+          team2Id: m.team2Id,
+          team1_id: m.team1Id,
+          team2_id: m.team2Id,
+          status: m.status,
+          roundOrder: m.roundOrder,
+          court: m.court,
+          venue: m.court,
+          round: m.round,
+          team1_score: m.team1Score,
+          team2_score: m.team2Score,
+          team1Score: m.team1Score,
+          team2Score: m.team2Score,
+          team1_name: t1.name || '队伍1',
+          team1_members: memberNames(t1.members),
+          team1_totalLevel: totalLevel(t1.members),
+          team2_name: t2.name || '队伍2',
+          team2_members: memberNames(t2.members),
+          team2_totalLevel: totalLevel(t2.members)
+        };
+      }),
+      userRegistration: userReg ? regVO(userReg) : null,
+      pendingCancelCount: pendingCancelCount,
+      album: album,
+      globalBanner: globalBanner,
+      waitlist: waitlist.map(function(r) {
+        return {
+          id: r._id, userId: r.userId, nickname: r.nickname, avatar: r.avatar,
+          level: r.level, waitlistOrder: r.waitlistOrder, agentUserId: r.agentUserId
+        };
+      })
+    };
+
+    return { success: true, data: detail, message: 'ok' };
   } catch (err) {
-    console.error('获取活动详情失败：', err);
-    return {
-      success: false,
-      error: err.message || '获取活动详情失败'
-    };
+    logger.error('get-activity-detail', action, { err: err });
+    return { success: false, message: err.message || '获取活动详情失败' };
   }
 };

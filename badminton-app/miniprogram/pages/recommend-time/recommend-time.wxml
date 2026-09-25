@@ -1,0 +1,32 @@
+<view class="recommend-page">
+  <view wx:if="{{loading}}" class="recommend-loading">
+    <text style="color:#8d9a95">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <view class="detail-section" wx:if="{{recommendations.length > 0}}">
+      <text class="section-title">推荐时间</text>
+      <view class="time-card" wx:for="{{recommendations}}" wx:key="slot">
+        <view class="time-header">
+          <view>
+            <text class="time-day">{{item.weekdayText}}</text>
+            <text class="time-slot"> {{item.slot}}</text>
+          </view>
+          <text class="reliable-tag {{item.reliable ? 'reliable-yes' : 'reliable-no'}}">{{item.reliable ? '数据可靠' : '数据不足'}}</text>
+        </view>
+        <view class="time-rate">满员率 {{item.rateText}}% · 历史{{item.n}}场</view>
+        <view class="time-suggested" wx:if="{{item.timeText}}">建议时间：{{item.timeText}}</view>
+        <button class="btn-select" data-time="{{item.timeText}}" bindtap="selectTime">选择此时间</button>
+      </view>
+    </view>
+
+    <view class="detail-section" wx:if="{{aiNote}}">
+      <text class="section-title">AI 建议</text>
+      <view class="ai-note">{{aiNote}}</view>
+    </view>
+
+    <view wx:if="{{fallbackTip}}" class="fallback-tip">{{fallbackTip}}</view>
+
+    <view wx:if="{{recommendations.length === 0 && !fallbackTip}}" class="empty-tip">暂无推荐数据</view>
+  </block>
+</view>

@@ -1,0 +1,42 @@
+<view class="voice-page">
+  <view class="detail-section">
+    <text class="section-title">语音录入</text>
+    <view class="record-area">
+      <button class="record-btn {{recording ? 'recording' : 'idle'}}" bindtap="toggleRecord">
+        {{recording ? '⏹' : '🎤'}}
+      </button>
+      <view class="record-status">{{recording ? '录音中...' : '点击开始录音'}}</view>
+      <view class="record-duration" wx:if="{{duration > 0}}">{{duration}}s</view>
+    </view>
+    <button class="btn-parse" wx:if="{{audioFile && !recording}}" bindtap="parseAudio" disabled="{{submitting}}">识别语音比分</button>
+  </view>
+
+  <view class="detail-section">
+    <text class="section-title">文字输入比分</text>
+    <textarea class="text-input" placeholder="例如：A 21 比 15 B" value="{{textInput}}" bindinput="onTextInput" />
+    <button class="btn-parse" bindtap="parseText">识别比分</button>
+  </view>
+
+  <view class="detail-section" wx:if="{{result}}">
+    <text class="section-title">识别结果</text>
+    <view class="result-card">
+      <view class="result-row">
+        <text class="result-label">{{team1Label || '队伍1'}}</text>
+        <text class="result-value">{{result.team1Score}}</text>
+      </view>
+      <view class="result-row">
+        <text class="result-label">{{team2Label || '队伍2'}}</text>
+        <text class="result-value">{{result.team2Score}}</text>
+      </view>
+      <view class="result-row">
+        <text class="result-label">置信度</text>
+        <text class="result-value {{result.confidence >= 0.85 ? 'confidence-high' : 'confidence-low'}}">{{result.confidenceText}}%</text>
+      </view>
+    </view>
+
+    <view wx:if="{{result.needReview}}" class="need-review-tip">识别不确定，请核对比分后提交</view>
+
+    <button class="btn-submit" bindtap="submitScore" disabled="{{submitting}}">{{submitting ? '提交中...' : '提交比分'}}</button>
+    <button class="btn-retry" wx:if="{{result.needReview}}" bindtap="resetInput">重新输入</button>
+  </view>
+</view>

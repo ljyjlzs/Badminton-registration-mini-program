@@ -4,6 +4,7 @@
   "projectname": "badminton-registration",
   "description": "羽毛球报名小程序",
   "appid": "wxb0369110c3c788ef",
+  "cloudEnvId": "cloud1-3guy8euw3babaf6d",
   "setting": {
     "urlCheck": false,
     "es6": true,
@@ -46,7 +47,7 @@
     "disableSWC": true
   },
   "compileType": "miniprogram",
-  "libVersion": "2.19.0",
+  "libVersion": "3.15.0",
   "srcMiniprogramRoot": "miniprogram/",
   "cloudfunctionTemplateRoot": "cloudfunctionTemplate/",
   "editorSetting": {
@@ -56,7 +57,10 @@
   "simulatorPluginLibVersion": {},
   "packOptions": {
     "ignore": [
-      { "type": "glob", "value": "cloudfunctions/*/node_modules/**" }
+      {
+        "value": "cloudfunctions/*/node_modules/**",
+        "type": "glob"
+      }
     ],
     "include": []
   }

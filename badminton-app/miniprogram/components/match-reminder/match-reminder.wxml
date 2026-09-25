@@ -1,0 +1,10 @@
+<view wx:if="{{visible}}" class="match-reminder">
+  <view wx:if="{{currentMatch}}" class="reminder-current">
+    <text class="reminder-dot live"></text>
+    <text class="reminder-text">当前：{{currentMatch.team1Name || currentMatch.message || '比赛即将开始'}}</text>
+  </view>
+  <view wx:if="{{nextMatch}}" class="reminder-next">
+    <text class="reminder-dot"></text>
+    <text class="reminder-text">下一场：{{nextMatch.team1Name || nextMatch.message || '请关注后续赛程'}}</text>
+  </view>
+</view>

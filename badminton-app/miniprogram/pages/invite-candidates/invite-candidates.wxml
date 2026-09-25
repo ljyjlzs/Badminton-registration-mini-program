@@ -1,0 +1,33 @@
+<view class="invite-page">
+  <view wx:if="{{loading}}" class="invite-loading">
+    <text style="color:#8d9a95">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <view class="detail-section">
+      <text class="section-title">可邀请好友 (还差{{remaining}}人)</text>
+      <block wx:if="{{candidates.length > 0}}">
+        <view class="candidate-item" wx:for="{{candidates}}" wx:key="userId" data-userid="{{item.userId}}" bindtap="toggleSelect">
+          <view class="candidate-check {{selected[item.userId] ? 'checked' : ''}}">{{selected[item.userId] ? '✓' : ''}}</view>
+          <view class="candidate-avatar">{{item.nickname ? item.nickname[0] : '球'}}</view>
+          <view class="candidate-info">
+            <view class="candidate-name">{{item.nickname}}</view>
+            <view class="candidate-meta">等级 Lv.{{item.level}}</view>
+            <view class="candidate-reason" wx:for="{{item.reasons}}" wx:for-item="reason" wx:key="index">{{reason}}</view>
+          </view>
+        </view>
+      </block>
+      <view wx:else class="empty-tip">暂无可邀请的好友</view>
+      <button class="btn-generate" bindtap="generateInvites" disabled="{{generating}}" wx:if="{{candidates.length > 0}}">{{generating ? '生成中...' : '生成邀请语'}}</button>
+    </view>
+
+    <view class="detail-section" wx:if="{{invites.length > 0}}">
+      <text class="section-title">邀请语</text>
+      <view class="invite-card" wx:for="{{invites}}" wx:key="userId">
+        <view class="invite-name">{{item.nickname || '通用邀约'}}</view>
+        <view class="invite-content">{{item.content}}</view>
+        <button class="btn-copy" data-text="{{item.content}}" bindtap="copyInvite">复制</button>
+      </view>
+    </view>
+  </block>
+</view>
