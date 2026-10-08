@@ -8,6 +8,7 @@ Page({
     activity: null,
     isOrganizer: false,
     loading: true,
+    loadError: false,
     tab: 'matches',
     courts: [],
     rankings: null,
@@ -37,7 +38,7 @@ Page({
   },
 
   loadMatches: function () {
-    this.setData({ loading: true });
+    this.setData({ loading: true, loadError: false });
     callFunction('court-matches', 'list', { activityId: this.data.activityId }).then(res => {
       this.setData({ loading: false });
       if (res.success) {
@@ -52,7 +53,16 @@ Page({
       } else {
         wx.showToast({ title: res.message || '加载失败', icon: 'none' });
       }
-    }).catch(() => { this.setData({ loading: false }); });
+    }).catch(() => {
+      // BUG-46: 加载失败展示可重试错误态
+      this.setData({ loading: false, loadError: true });
+    });
+  },
+
+  // BUG-46: 加载失败后重新加载
+  retryLoad: function () {
+    this.loadActivity();
+    this.loadMatches();
   },
 
   generate: function () {
@@ -113,5 +123,19 @@ Page({
     }).catch(() => { wx.hideLoading(); wx.showToast({ title: '失败', icon: 'none' }); });
   },
 
-  goBack: function () { wx.navigateBack(); }
+  goBack: function () { wx.navigateBack(); },
+
+  onShareAppMessage: function () {
+    return {
+      title: '场地双打',
+      path: '/pages/court-detail/court-detail?activityId=' + (this.data.activityId || '')
+    };
+  },
+
+  onShareTimeline: function () {
+    return {
+      title: '场地双打',
+      query: 'activityId=' + (this.data.activityId || '')
+    };
+  }
 });

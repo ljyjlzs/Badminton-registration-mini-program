@@ -8,6 +8,8 @@ const logger = require('./logger');
 // ARCH-01: 共享 AI 模块（由 sync-shared.js 复制到本目录，必须本地 require）
 const { callAIJson } = require('./ai.js');
 const { rateLimit } = require('./rateLimit.js');
+// ENG-11: 活动上限常量（由 sync-shared.js 复制）
+const { ACTIVITY_LIMITS } = require('./constants.js');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -19,11 +21,11 @@ function normalizeDraft(d) {
   const draft = d || {};
   let type = draft.type;
   if (type !== 'singles' && type !== 'fixed-doubles') type = 'doubles';
-  const minPlayers = type === 'singles' ? 3 : 4;
+  const minPlayers = type === 'singles' ? 3 : ACTIVITY_LIMITS.MIN_PLAYERS;
   let maxPlayers = draft.maxPlayers != null ? Number(draft.maxPlayers) : 8;
   if (isNaN(maxPlayers)) maxPlayers = 8;
   if (maxPlayers < minPlayers) maxPlayers = minPlayers;
-  if (maxPlayers > 100) maxPlayers = 100;
+  if (maxPlayers > ACTIVITY_LIMITS.MAX_PLAYERS) maxPlayers = ACTIVITY_LIMITS.MAX_PLAYERS;
   let name = draft.name || '';
   if (!name) {
     const now = new Date();

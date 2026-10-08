@@ -8,6 +8,8 @@ const logger = require('./logger');
 const https = require('https');
 const crypto = require('crypto');
 const { rateLimit } = require('./rateLimit.js');
+// ENG-11: 比分范围常量（由 sync-shared.js 复制）
+const { SCORE_MIN, SCORE_MAX } = require('./constants.js');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -22,7 +24,7 @@ function parseScoreText(text) {
   let m;
   while ((m = re.exec(t)) !== null) {
     const scoreA = Number(m[2]); const scoreB = Number(m[3]);
-    if (scoreA < 0 || scoreA > 30 || scoreB < 0 || scoreB > 30) continue;
+    if (scoreA < SCORE_MIN || scoreA > SCORE_MAX || scoreB < SCORE_MIN || scoreB > SCORE_MAX) continue;
     result.push({ teamA: m[1] || '', scoreA, scoreB, teamB: m[4] || '' });
   }
   return result;

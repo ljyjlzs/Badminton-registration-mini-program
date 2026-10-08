@@ -27,6 +27,7 @@ Page({
     teams: [],
     matches: [],
     loading: true,
+    loadError: false,
     isOrganizer: false,
     namingTeamId: null,
     teamName: '',
@@ -78,7 +79,9 @@ Page({
   loadGroupingData: function() {
     // UX-10: 已有数据时静默刷新，避免从子页面返回整页白屏
     if (!this.data.activity) {
-      this.setData({ loading: true });
+      this.setData({ loading: true, loadError: false });
+    } else {
+      this.setData({ loadError: false });
     }
     var self = this;
     callFunction('get-activity-detail', 'detail', { activityId: this.data.activityId }).then(function(res) {
@@ -121,9 +124,15 @@ Page({
         });
       }
     }).catch(function(err) {
-      self.setData({ loading: false });
+      // BUG-46: 加载失败展示可重试错误态
+      self.setData({ loading: false, loadError: true });
       console.error('加载分组数据失败：', err);
     });
+  },
+
+  // BUG-46: 加载失败后重新加载
+  retryLoad: function() {
+    this.loadGroupingData();
   },
 
   startNaming: function(e) {

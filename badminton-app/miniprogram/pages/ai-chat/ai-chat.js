@@ -1,6 +1,8 @@
 // pages/ai-chat/ai-chat.js
 const app = getApp();
 const { request } = require('../../utils/request.js');
+// ENG-11: 默认等级常量
+const constants = require('../../utils/constants.js');
 
 Page({
   data: {
@@ -13,6 +15,8 @@ Page({
 
   // AI-33: 请求序号，初始化放在生命周期外避免被 setData 序列化
   _aiSeq: 0,
+  // PERF-18: onShow 历史拉取节流时间戳（同 AI-33，放生命周期外）
+  _lastLoadAt: 0,
 
   onShow: function() {
     // 授权拦截：未登录则跳回首页
@@ -40,6 +44,8 @@ Page({
       });
       return;
     }
+    // PERF-18: _lastLoadAt 节流，15s 内不重复请求
+    if (Date.now() - (this._lastLoadAt || 0) < 15000) return;
     // PERF-26: 仅脏标记或首次进入时刷新历史
     if (this._historyDirty || !this._historyLoaded) {
       this.loadHistory();
@@ -50,6 +56,7 @@ Page({
   // 加载聊天历史
   // ======================================================
   loadHistory: function() {
+    this._lastLoadAt = Date.now();
     this.setData({ loadingHistory: true });
     request('ai-history', 'get', {}).then(res => {
       this.setData({ loadingHistory: false });
@@ -222,7 +229,7 @@ Page({
         this.setData({ loading: false });
         wx.showToast({ title: 'AI响应超时，请重试', icon: 'none', duration: 3000 });
       }
-    }, 30000);
+    }, 26000);
 
     request('ai-chat', 'chat', params).then(res => {
       clearTimeout(timeoutId);
@@ -422,11 +429,14 @@ Page({
       activityId: params.activityId || '',
       activityName: params.activityName || '',
       nickname: userInfo.nickname,
-      level: userInfo.level || 5,
+      level: userInfo.level || constants.DEFAULT_LEVEL,
       avatar: userInfo.avatar || ('avatar_' + (userInfo.nickname || '?').charAt(0))
     }).then(res => {
       if (res.result && res.result.success) {
-        this._finishAction(idx, true, '已成功报名参加活动「' + params.activityName + '」！', params.activityId);
+        // BUG-49: 回显云函数返回文案（已区分候补/正式）；isWaiting 仅决定缺省文案
+        const isWaiting = !!(res.result.data && res.result.data.isWaiting);
+        const msg = res.result.message || (isWaiting ? '已加入候补名单' : '已成功报名参加活动「' + params.activityName + '」！');
+        this._finishAction(idx, true, msg, params.activityId);
       } else {
         this._finishAction(idx, false, '报名失败：' + (res.result?.message || '未知错误'), params.activityId);
       }
@@ -533,6 +543,12 @@ Page({
     return {
       title: '羽毛球 AI 助手',
       path: '/pages/ai-chat/ai-chat'
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: '羽毛球 AI 助手'
     };
   }
 });

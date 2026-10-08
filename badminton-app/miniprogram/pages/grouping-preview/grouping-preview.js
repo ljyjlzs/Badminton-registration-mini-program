@@ -1,4 +1,6 @@
 var callFunction = require('../../utils/request').callFunction;
+// ENG-11: 默认等级常量
+var constants = require('../../utils/constants.js');
 
 Page({
   data: {
@@ -11,6 +13,7 @@ Page({
     rules: [],
     explanation: [],
     loading: true,
+    loadError: false,
     confirming: false
   },
 
@@ -23,7 +26,7 @@ Page({
 
   loadPreview: function() {
     var that = this;
-    that.setData({ loading: true });
+    that.setData({ loading: true, loadError: false });
 
     // 先取活动详情拿 type，此前 activityType 从未赋值导致永远回退 doubles
     callFunction('get-activity-detail', 'detail', { activityId: that.data.activityId })
@@ -63,17 +66,22 @@ Page({
             return {
               index: i + 1,
               memberNamesText: c.members.map(function(m) { return m.nickname || '球友'; }).join(' / '),
-              totalLevel: c.members.reduce(function(a, m) { return a + (m.level || 5); }, 0)
+              totalLevel: c.members.reduce(function(a, m) { return a + (m.level || constants.DEFAULT_LEVEL); }, 0)
             };
           })
         });
       })
       .catch(function(err) {
         console.error('加载分组预览失败：', err);
-        that.setData({ loading: false });
+        // BUG-46: 加载失败展示可重试错误态（不再自动 navigateBack，保留重试入口）
+        that.setData({ loading: false, loadError: true });
         wx.showToast({ title: '预览失败', icon: 'none' });
-        setTimeout(function() { wx.navigateBack(); }, 1500);
       });
+  },
+
+  // BUG-46: 加载失败后重新加载
+  retryLoad: function() {
+    this.loadPreview();
   },
 
   goBack: function() {
@@ -140,6 +148,13 @@ Page({
     return {
       title: '羽毛球活动分组预览',
       path: '/pages/grouping-preview/grouping-preview?activityId=' + this.data.activityId
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: '羽毛球活动分组预览',
+      query: 'activityId=' + this.data.activityId
     };
   }
 });

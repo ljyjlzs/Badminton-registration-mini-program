@@ -1,6 +1,10 @@
 <view class="note-page">
   <view class="loading" wx:if="{{loading}}">生成中...</view>
-  <block wx:if="{{!loading}}">
+  <view wx:if="{{loadError}}" class="load-error">
+    <text>加载失败，请重试</text>
+    <button bindtap="retryLoad">重新加载</button>
+  </view>
+  <block wx:if="{{!loading && !loadError}}">
     <view class="title">{{title}}</view>
     <view class="content">{{note}}</view>
     <view class="source" wx:if="{{source}}">来源：{{source === 'ai' ? 'AI生成' : '模板'}}</view>

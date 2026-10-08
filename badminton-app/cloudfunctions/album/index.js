@@ -6,6 +6,8 @@
 const cloud = require('wx-server-sdk');
 
 const logger = require('./logger');
+// ENG-11: 默认分页常量（由 sync-shared.js 复制）
+const { PAGE_SIZE } = require('./constants.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const db = cloud.database();
@@ -17,7 +19,7 @@ exports.main = async (event) => {
   const openid = wxContext.OPENID;
   try {
     if (action === 'list' || action === 'getPhotos') {
-      const { activityId, pageSize = 20, page = 1 } = payload;
+      const { activityId, pageSize = PAGE_SIZE, page = 1 } = payload;
       let q = {};
       if (activityId) q.activityId = activityId;
       const total = await db.collection('photos').where(q).count();

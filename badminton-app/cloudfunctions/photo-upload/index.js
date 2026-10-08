@@ -1,6 +1,6 @@
 /**
  * photo-upload 云函数 - 上传图片 + 元数据（06）
- * 动作：upload(fileID 直传落库 / 旧 data base64 兼容) / list / delete(含云存储清理)
+ * 动作：authorize(两段式上传前置鉴权) / upload(fileID 直传落库 / 旧 data base64 兼容) / list / delete(含云存储清理)
  * payload: { action, activityId, fileID?, cloudPath?, thumbData?, data?, fileName?, tags?, caption? }
  */
 const cloud = require('wx-server-sdk');
@@ -12,11 +12,49 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 
+/**
+ * 两段式 authorize 前置校验：getWXContext 取 openid，查报名表确认活动成员（或组织者），非成员拒绝
+ * @param {string} activityId 活动 ID
+ * @param {string} openid 调用者 OPENID
+ * @param {string} [denyMessage] 非成员拒绝文案
+ * @returns {Promise<{ok: boolean, message?: string, act?: object|null}>}
+ */
+async function assertActivityMember(activityId, openid, denyMessage) {
+  if (!openid) return { ok: false, message: '未获取到用户身份，请重新进入小程序', act: null };
+  const actRes = await db.collection('activities').doc(activityId).get();
+  const act = actRes.data || null;
+  if (!act) return { ok: false, message: '活动不存在', act: null };
+  // BUG-71: 同时校验本人报名和代报人身份
+  const isMember = await db.collection('registrations').where(_.and([
+    { activityId },
+    _.or([{ userId: openid }, { agentUserId: openid }])
+  ])).count();
+  if (isMember.total === 0 && act.organizerId !== openid) {
+    return { ok: false, message: denyMessage || '仅活动成员可操作', act };
+  }
+  return { ok: true, act };
+}
+
 exports.main = async (event) => {
   const { action = 'upload', payload = {} } = event;
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
   try {
+    // 两段式上传前置鉴权：校验成员并返回约定 cloudPath，客户端只允许上传到该路径后再回填
+    if (action === 'authorize') {
+      const { activityId, fileName } = payload;
+      if (!activityId) return { success: false, message: 'activityId 不能为空' };
+      const chk = await assertActivityMember(activityId, openid, '仅活动成员可上传');
+      if (!chk.ok) return { success: false, message: chk.message };
+      const stamp = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      const ext = (fileName || 'photo.jpg').split('.').pop().split('?')[0] || 'jpg';
+      const safeExt = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext.toLowerCase()) ? ext.toLowerCase() : 'jpg';
+      return {
+        success: true,
+        data: { activityId, cloudPath: 'photos/' + activityId + '/' + stamp + '.' + safeExt },
+        message: 'ok'
+      };
+    }
     if (action === 'upload') {
       const { activityId, data, fileID, cloudPath, fileName, tags, caption, thumbData } = payload;
       if (!activityId) return { success: false, message: 'activityId 不能为空' };
@@ -31,17 +69,12 @@ exports.main = async (event) => {
       const MAX_THUMB_LEN = 512 * 1024;        // ~384KB binary
       if (data && String(data).length > MAX_DATA_LEN) return { success: false, message: '图片过大，请压缩后重试' };
       if (thumbData && String(thumbData).length > MAX_THUMB_LEN) return { success: false, message: '缩略图过大' };
-      const act = await db.collection('activities').doc(activityId).get();
-      if (!act.data) return { success: false, message: '活动不存在' };
+      // 两段式 authorize 前置：先校验用户身份与活动成员，非成员拒绝
+      // COST-05: 直传链路仍必须做成员校验，防止绕过
+      const chk = await assertActivityMember(activityId, openid, '仅活动成员可上传');
+      if (!chk.ok) return { success: false, message: chk.message };
       // 上传者以服务端 OPENID 为准，不信任客户端 uploadedBy
       const uploader = openid;
-      // COST-05: 直传链路仍必须做成员校验，防止绕过
-      // BUG-71: 同时校验本人报名和代报人身份
-      const isMember = await db.collection('registrations').where(_.and([
-        { activityId },
-        _.or([{ userId: openid }, { agentUserId: openid }])
-      ])).count();
-      if (isMember.total === 0 && act.data.organizerId !== openid) return { success: false, message: '仅活动成员可上传' };
 
       let finalFileID = fileID;
       let finalCloudPath = cloudPath || '';
@@ -103,13 +136,9 @@ exports.main = async (event) => {
     if (action === 'list') {
       const { activityId } = payload;
       if (!activityId) return { success: false, message: 'activityId 不能为空' };
-      const act = await db.collection('activities').doc(activityId).get();
-      if (!act.data) return { success: false, message: '活动不存在' };
-      const isMember = await db.collection('registrations').where(_.and([
-        { activityId },
-        _.or([{ userId: openid }, { agentUserId: openid }])
-      ])).count();
-      if (isMember.total === 0 && act.data.organizerId !== openid) return { success: false, message: '仅活动成员可查看' };
+      // 两段式 authorize 前置：先校验用户身份与活动成员，非成员拒绝
+      const chk = await assertActivityMember(activityId, openid, '仅活动成员可查看');
+      if (!chk.ok) return { success: false, message: chk.message };
       const list = await db.collection('photos').where({ activityId }).orderBy('takenAt', 'desc').get();
       const photos = list.data || [];
       // 补每人点赞态 liked/likedByMe
@@ -130,9 +159,11 @@ exports.main = async (event) => {
       if (!photoId) return { success: false, message: 'photoId 不能为空' };
       const photo = await db.collection('photos').doc(photoId).get();
       if (!photo.data) return { success: false, message: '照片不存在' };
+      // 两段式 authorize 前置：先校验用户身份与活动成员，非成员拒绝
+      const chk = await assertActivityMember(photo.data.activityId, openid, '无权限删除');
+      if (!chk.ok) return { success: false, message: chk.message };
       // 仅上传者或组织者可删除
-      const act = await db.collection('activities').doc(photo.data.activityId).get();
-      if (photo.data.uploadedBy !== openid && (!act.data || act.data.organizerId !== openid)) {
+      if (photo.data.uploadedBy !== openid && chk.act.organizerId !== openid) {
         return { success: false, message: '无权限删除' };
       }
       await db.collection('photos').doc(photoId).remove();

@@ -71,7 +71,8 @@ Component({
             loadError: false
           });
         }).catch(function() {
-          that.setData({ loadError: true });
+          // BUG-46: 加载失败隐藏提醒浮层，避免展示过期提醒；初始 visible 亦为 false
+          that.setData({ loadError: true, visible: false });
         });
     }
   }

@@ -1,11 +1,16 @@
 <view class="photo-detail-page">
-  <view wx:if="{{loading}}" style="min-height:100vh;display:flex;align-items:center;justify-content:center">
+  <view wx:if="{{loadError}}" class="load-error">
+    <text>加载失败，请重试</text>
+    <button bindtap="retryLoad">重新加载</button>
+  </view>
+
+  <view wx:elif="{{loading}}" style="min-height:100vh;display:flex;align-items:center;justify-content:center">
     <text style="color:#8d9a95">加载中...</text>
   </view>
 
   <block wx:else>
     <view class="photo-main" wx:if="{{photo}}">
-      <image src="{{photo.fileID}}" mode="widthFix" lazy-load binderror="onImgError" />
+      <image src="{{photo.fileID}}" mode="widthFix" lazy-load binderror="onImgError" hidden="{{photoImgError}}" />
     </view>
 
     <view class="photo-actions" wx:if="{{photo}}">

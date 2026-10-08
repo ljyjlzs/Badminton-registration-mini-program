@@ -1,21 +1,25 @@
 // 活动详情页面逻辑
 var app = getApp();
 var callFunction = require('../../utils/request.js').callFunction;
+var timeUtil = require('../../utils/time.js');
+var constants = require('../../utils/constants.js');
 
 Page({
    data: {
      activityId: '',
      activity: null,
+     activityWatcher: null,
      registrations: [],
      matches: [],
      userRegistration: null,
      isOrganizer: false,
      pendingCancelCount: 0,
      loading: true,
+     loadError: false,
      showLevelPicker: false,
      showCancelModal: false,
      cancelModalItem: null,
-     selectedLevel: 5,
+     selectedLevel: constants.DEFAULT_LEVEL,
      inputNickname: '',
      inputAvatar: '',
      inputPartnerId: '',
@@ -25,7 +29,7 @@ Page({
      showAgentModal: false,
      agentName: '',
      agentPhone: '',
-     agentLevel: 5,
+     agentLevel: constants.DEFAULT_LEVEL,
      waitlist: [],
      agentRegistrations: [],
      globalBannerVisible: false,
@@ -50,8 +54,8 @@ Page({
      agentPartnerId: '',
      showAgentLevelPicker: false,
      agentLevelEditId: '',
-     agentLevelEditValue: 5,
-     levelDesc: ['萌新·娱乐场', '新手·养生球', '新手·进阶', '初学者提高', '熟手·小对抗', '中级爱好者', '中高级玩家', '高级爱好者', '高手·大对抗', '专业水平'],
+     agentLevelEditValue: constants.DEFAULT_LEVEL,
+     levelDesc: constants.LEVEL_DESC,
      stopPropagation: function() {},
      submittingGroup: false,
      statusText: {
@@ -98,6 +102,7 @@ Page({
       this._watcher.close();
       this._watcher = null;
     }
+    this.data.activityWatcher = null;
   },
 
   onHide: function() {
@@ -105,6 +110,7 @@ Page({
       this._watcher.close();
       this._watcher = null;
     }
+    this.data.activityWatcher = null;
   },
 
   // UX-26: 下拉刷新（静默刷新，避免全屏 loading 闪烁）
@@ -116,7 +122,9 @@ Page({
   loadActivityDetail: function(silent) {
     var self = this;
     if (!silent) {
-      self.setData({ loading: true });
+      self.setData({ loading: true, loadError: false });
+    } else {
+      self.setData({ loadError: false });
     }
 
     callFunction('get-activity-detail', 'detail', { activityId: self.data.activityId }).then(function(res) {
@@ -212,14 +220,26 @@ Page({
       }
     }).catch(function(err) {
       if (!silent) {
-        self.setData({ loading: false });
+        self.setData({ loading: false, loadError: true });
+      } else {
+        self.setData({ loadError: true });
       }
       console.error('加载活动详情失败：', err);
       wx.showToast({ title: (err && err.message) || '加载失败', icon: 'none' });
     });
   },
 
+  // BUG-46: 加载失败后重新加载
+  retryLoad: function() {
+    this.loadActivityDetail();
+  },
+
   watchActivity: function() {
+    // BUG-18: 自我增殖守卫 — 创建新监听前先关闭并清空 data.activityWatcher
+    if (this.data.activityWatcher) {
+      try { this.data.activityWatcher.close(); } catch (e) {}
+      this.data.activityWatcher = null;
+    }
     var self = this;
     if (self._watcher) {
       self._watcher.close();
@@ -229,7 +249,7 @@ Page({
     var activityId = self.data.activityId;
     if (!activityId) return;
 
-    self._watcher = db.collection('activities').doc(activityId)
+    var watcher = db.collection('activities').doc(activityId)
       .watch({
         onChange: function(res) {
           if (res.docChanges && res.docChanges.length > 0) {
@@ -249,6 +269,8 @@ Page({
           console.error('监听失败：', err);
         }
       });
+    self._watcher = watcher;
+    self.data.activityWatcher = watcher;
   },
 
   showLevelPicker: function() {
@@ -268,8 +290,8 @@ Page({
     
     this.setData({
       showLevelPicker: true,
-      selectedLevel: this.data.userRegistration ? this.data.userRegistration.level : 5,
-      pickerLevel: (this.data.userRegistration ? this.data.userRegistration.level : 5) - 1,
+      selectedLevel: this.data.userRegistration ? this.data.userRegistration.level : constants.DEFAULT_LEVEL,
+      pickerLevel: (this.data.userRegistration ? this.data.userRegistration.level : constants.DEFAULT_LEVEL) - 1,
       inputNickname: userInfo.nickname || '',
       inputAvatar: userInfo.avatar || '',
       inputPartnerId: '',
@@ -691,7 +713,7 @@ Page({
   showAgentModal: function() {
     // 打开代报弹窗时填充可选搭档列表（此前为空，代报选不到人）
     var availablePartners = (this.data.activity && this.data.activity.type === 'fixed-doubles') ? this.getAvailablePartners() : [];
-    this.setData({ showAgentModal: true, agentName: '', agentPhone: '', agentLevel: 5, agentPartnerId: '', availablePartners: availablePartners });
+    this.setData({ showAgentModal: true, agentName: '', agentPhone: '', agentLevel: constants.DEFAULT_LEVEL, agentPartnerId: '', availablePartners: availablePartners });
   },
   hideAgentModal: function() {
     this.setData({ showAgentModal: false });
@@ -1044,33 +1066,9 @@ Page({
 
   onGlobalBannerTap: function() {},
 
-  // UX-22: 解析活动时间戳（复用 formatTime 的 iOS 兼容解析）
+  // UX-22: 解析活动时间戳（ENG-04：抽到 utils/time.js，此处保留方法名兼容调用方）
   parseActivityTimestamp: function(timeValue) {
-    if (!timeValue && timeValue !== 0) return 0;
-    var timestamp = timeValue;
-    if (typeof timeValue === 'number') {
-      timestamp = timeValue;
-    } else if (typeof timeValue === 'string') {
-      if (timeValue.indexOf('T') >= 0) {
-        timestamp = new Date(timeValue).getTime();
-      } else if (!isNaN(timeValue)) {
-        timestamp = parseInt(timeValue);
-      } else if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(timeValue)) {
-        timestamp = new Date(timeValue.replace(/-/g, '/')).getTime();
-      } else {
-        return 0;
-      }
-    } else if (typeof timeValue === 'object') {
-      if (timeValue.$date) {
-        timestamp = timeValue.$date;
-      } else {
-        return 0;
-      }
-    }
-    if (!timestamp || isNaN(timestamp)) return 0;
-    var date = new Date(timestamp);
-    if (isNaN(date.getTime())) return 0;
-    return date.getTime();
+    return timeUtil.parseTime(timeValue);
   },
 
   // UX-22: 加入系统日历
@@ -1094,23 +1092,13 @@ Page({
         wx.showToast({ title: '已加入日历', icon: 'success' });
       },
       fail: function() {
-        wx.showToast({ title: '加入日历失败', icon: 'none' });
+        wx.showToast({ title: '请在系统日历中手动添加', icon: 'none' });
       }
     });
   },
 
   formatTime: function(timeValue) {
-    if (!timeValue && timeValue !== 0) return '待定';
-
-    var timestamp = this.parseActivityTimestamp(timeValue);
-    if (!timestamp) return '待定';
-
-    var date = new Date(timestamp);
-    var month = date.getMonth() + 1;
-    var day = date.getDate();
-    var hour = date.getHours();
-    var minute = date.getMinutes();
-    return month + '月' + day + '日 ' + hour + ':' + String(minute).padStart(2, '0');
+    return timeUtil.formatTime(timeValue, '待定');
   },
 
   onShareAppMessage: function() {
@@ -1274,8 +1262,12 @@ Page({
     }
   },
 
-  // UX-16: 图片加载失败简单处理
+  // UX-16: 图片加载失败兜底 — 回退到占位（上传按钮/首字母）
   onImgError: function(e) {
     console.warn('图片加载失败', e && e.detail);
+    var ds = (e && e.currentTarget && e.currentTarget.dataset) || {};
+    if (ds.imgKey === 'inputAvatar' && this.data.inputAvatar) {
+      this.setData({ inputAvatar: '' });
+    }
   }
 });

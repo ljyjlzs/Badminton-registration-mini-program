@@ -5,6 +5,11 @@
     <button class="btn-parse" bindtap="parseAi" disabled="{{parsing}}">{{parsing ? 'AI 解析中...' : 'AI 智能解析'}}</button>
   </view>
 
+  <view wx:if="{{loadError}}" class="load-error">
+    <text>加载失败，请重试</text>
+    <button bindtap="retryLoad">重新加载</button>
+  </view>
+
   <view class="detail-section" wx:if="{{draft}}">
     <text class="section-title">活动信息</text>
 

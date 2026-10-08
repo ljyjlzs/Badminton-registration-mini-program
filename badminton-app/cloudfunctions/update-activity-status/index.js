@@ -1,5 +1,6 @@
 var cloud = require('wx-server-sdk');
 const logger = require('./logger');
+const { requireNum } = require('./validate.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 var db = cloud.database();
 var _ = db.command;
@@ -39,8 +40,10 @@ exports.main = async function(event, context) {
 
     // 容量调整（不允许小于当前已报名人数）
     if (payload.maxPlayers != null) {
-      var maxP = Number(payload.maxPlayers);
-      if (isNaN(maxP) || maxP < 1) return { success: false, message: '人数上限必须大于0' };
+      if (actRes.data.status !== 'registering') return { success: false, message: '仅报名中活动可调整人数上限' };
+      var maxCheck = requireNum(payload.maxPlayers, '人数上限', 1);
+      if (!maxCheck.ok) return { success: false, message: maxCheck.message };
+      var maxP = maxCheck.value;
       var regCount = await db.collection('registrations').where({
         activityId: activityId,
         applyStatus: 'active',

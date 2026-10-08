@@ -176,7 +176,7 @@
       <view class="section-header">
         <view>
           <text class="section-title">可参加的活动</text>
-          <text class="section-caption">正在开放报名，适合直接加入 · 只显示最近 3 场</text>
+          <text class="section-caption">正在开放报名，适合直接加入 · 上拉加载更多</text>
         </view>
         <text class="section-more" bindtap="goToActivityList" data-tab="search">去挑一场</text>
       </view>
@@ -211,6 +211,13 @@
               backgroundColor="#dfe9e5"/>
           </view>
         </view>
+      </view>
+
+      <view wx:if="{{joinableLoadingMore}}" class="empty-tip" style="padding:12rpx 0;">
+        <text style="color:#999;font-size:24rpx;">加载更多...</text>
+      </view>
+      <view wx:elif="{{!joinableHasMore && joinableActivities.length > 0}}" class="empty-tip" style="padding:12rpx 0;">
+        <text style="color:#999;font-size:24rpx;">没有更多了</text>
       </view>
     </view>
 

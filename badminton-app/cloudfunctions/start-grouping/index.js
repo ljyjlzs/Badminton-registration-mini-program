@@ -10,7 +10,9 @@
  */
 const cloud = require('wx-server-sdk');
 const logger = require('./logger');
-const { buildRotatingDoublesPlan } = require('./rotating.js');
+const { buildRotatingDoublesPlan, getCourtLabel } = require('./rotating.js');
+// ENG-11: 赛程间隔/默认等级常量（由 sync-shared.js 复制到本目录）
+const { MATCH_SLOT_MS, DEFAULT_LEVEL } = require('./constants.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
@@ -113,11 +115,11 @@ exports.main = async (event, context) => {
         team2Id: teamIdMap[m.team2Key],
         status: 'pending',
         roundOrder: order,
-        court: m.court || courtLabel(order),
+        court: m.court || getCourtLabel(order),
         round: 'group',
         team1Score: null,
         team2Score: null,
-        scheduledTime: Date.now() + order * 15 * 60 * 1000,
+        scheduledTime: Date.now() + order * MATCH_SLOT_MS,
         createdAt: db.serverDate(),
         updatedAt: db.serverDate()
       };
@@ -153,7 +155,7 @@ async function buildPlan(activity, regs, playersMap) {
 }
 
 function mixedScore(userId, playersMap) {
-  const p = playersMap[userId] || { level: 5, rating: null };
+  const p = playersMap[userId] || { level: DEFAULT_LEVEL, rating: null };
   const level = p.level != null ? p.level : 5;
   const rating = p.rating != null ? p.rating : null;
   return rating != null ? level * 10 + rating / 100 : level * 10;
@@ -225,7 +227,7 @@ async function buildCourtDoublesPlan(activityId, regs, playersMap) {
     const sub = userIds.map(id => regByUser[id]).filter(Boolean);
     if (sub.length === 0) continue;
     const subPlan = buildRotatingDoublesPlan(sub, playersMap);
-    subPlan.matches.forEach(pm => { ro++; pm.roundOrder = ro; pm.court = court.label || '场地A'; });
+    subPlan.matches.forEach(pm => { ro++; pm.roundOrder = ro; pm.court = court.label || getCourtLabel(court.courtNo); });
     plan.teams.push(...subPlan.teams);
     plan.reasons.push(...subPlan.reasons);
     plan.matches.push(...subPlan.matches);
@@ -233,10 +235,4 @@ async function buildCourtDoublesPlan(activityId, regs, playersMap) {
   plan.matchesCount = plan.matches.length;
   plan.explanation = ['按场地划分双打，共' + courts.length + '个场地，各场地独立轮转'];
   return plan;
-}
-
-function courtLabel(i) {
-  // ARCH-04: 与 _shared/validate.js courtLabel 统一（64+n ≡ 65+i-1）
-  if (i <= 26) return '场地' + String.fromCharCode(64 + i);
-  return '场地' + i;
 }

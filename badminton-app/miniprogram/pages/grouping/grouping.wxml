@@ -4,6 +4,11 @@
     <text>加载中...</text>
   </view>
 
+  <view wx:if="{{loadError}}" class="load-error">
+    <text>加载失败，请重试</text>
+    <button bindtap="retryLoad">重新加载</button>
+  </view>
+
   <view wx:if="{{!loading && activity}}" class="page-shell grouping-shell">
     <!-- 全局横幅 -->
     <view wx:if="{{globalBannerVisible}}" class="global-banner">

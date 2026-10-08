@@ -3,6 +3,7 @@ const { callFunction } = require('../../utils/request.js');
 Page({
   data: {
     loading: true,
+    loadError: false,
     config: null,
     enabled: false,
     disabledReason: ''
@@ -21,7 +22,7 @@ Page({
 
   async loadData() {
     try {
-      this.setData({ loading: true });
+      this.setData({ loading: true, loadError: false });
       const data = await callFunction('voice-score-config', 'get', { activityId: this.activityId });
       const cfg = (data.data || data).config || {};
       this.setData({
@@ -34,8 +35,14 @@ Page({
       });
     } catch (e) {
       wx.showToast({ title: e.message, icon: 'none' });
-      this.setData({ loading: false });
+      // BUG-46: 加载失败展示可重试错误态
+      this.setData({ loading: false, loadError: true });
     }
+  },
+
+  // BUG-46: 加载失败后重新加载
+  retryLoad() {
+    this.loadData();
   },
 
   async toggleVoice(e) {
@@ -77,6 +84,12 @@ Page({
     return {
       title: '语音记分设置',
       path: '/pages/index/index'
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: '语音记分设置'
     };
   }
 });

@@ -18,6 +18,7 @@ Page({
     region: [],
     regionText: '',
     loading: false,
+    loadError: false,
     showAiDialog: false,
     aiInput: '',
     aiEnabled: true,
@@ -143,7 +144,7 @@ Page({
     var self = this;
     var input = self.data.aiInput.trim();
     if (!input) return;
-    self.setData({ 'aiSuggestion.show': true, 'aiSuggestion.loading': true });
+    self.setData({ 'aiSuggestion.show': true, 'aiSuggestion.loading': true, loadError: false });
     // AI-13: parse-activity 读 message 字段
     callFunction('parse-activity', 'parse', { message: input }).then(function(res) {
       var data = (res.data && res.data.draft) || res.data || res;
@@ -155,9 +156,14 @@ Page({
         'aiSuggestion.draft': data
       });
     }.bind(this)).catch(function() {
-      this.setData({ 'aiSuggestion.show': false });
+      this.setData({ 'aiSuggestion.show': false, loadError: true });
       wx.showToast({ title: 'AI 解析失败', icon: 'none' });
     }.bind(this));
+  },
+
+  // BUG-46: 加载失败后重新解析
+  retryLoad: function() {
+    this.parseActivity();
   },
 
   applyAiDraft: function() {
@@ -254,8 +260,8 @@ Page({
       wx.showToast({ title: '请输入活动名', icon: 'none' });
       return;
     }
-    if (name.length > 50) {
-      wx.showToast({ title: '活动名称不能超过50字', icon: 'none' });
+    if (name.length > 40) {
+      wx.showToast({ title: '活动名称不能超过40字', icon: 'none' });
       return;
     }
     if (!location || location.trim() === '') {
@@ -320,6 +326,12 @@ Page({
     return {
       title: '来打羽毛球吧！',
       path: '/pages/index/index'
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: '来打羽毛球吧！'
     };
   }
 });

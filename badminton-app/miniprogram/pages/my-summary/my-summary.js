@@ -1,11 +1,14 @@
 var app = getApp();
 var callFunction = require('../../utils/request.js').callFunction;
+// ENG-11: 默认等级常量
+var constants = require('../../utils/constants.js');
 
 Page({
   data: {
     loading: true,
+    loadError: false,
     statCards: [],
-    level: 5,
+    level: constants.DEFAULT_LEVEL,
     rank: '-',
     period: 'season',
     aiStyle: '',
@@ -63,7 +66,7 @@ Page({
 
   loadSummary: function(done) {
     var that = this;
-    that.setData({ loading: true });
+    that.setData({ loading: true, loadError: false });
 
     callFunction('get-user-stats', 'get', {
       period: that.data.period
@@ -79,7 +82,7 @@ Page({
         that.setData({
           loading: false,
           statCards: statCards,
-          level: d.level || 5,
+          level: d.level || constants.DEFAULT_LEVEL,
           rank: d.rank || '-',
           aiStyle: d.aiStyle || '',
           badges: (d.badges || []).map(function(b) {
@@ -107,9 +110,15 @@ Page({
       if (done) done();
     }).catch(function(err) {
       console.error('加载战绩失败：', err);
-      that.setData({ loading: false });
+      // BUG-46: 加载失败展示可重试错误态
+      that.setData({ loading: false, loadError: true });
       if (done) done();
     });
+  },
+
+  // BUG-46: 加载失败后重新加载
+  retryLoad: function() {
+    this.loadSummary();
   },
 
   drawTrendChart: function(trendData) {

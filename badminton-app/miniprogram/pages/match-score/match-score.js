@@ -78,6 +78,11 @@ Page({
     this.loadMatchDetail();
   },
 
+  // BUG-46: 统一重试入口
+  retryLoad: function() {
+    this.reloadData();
+  },
+
   loadMatchDetail: function() {
     // UX-10: 已有数据时静默刷新，避免从子页面返回整页白屏
     var silent = !!this.data.match;

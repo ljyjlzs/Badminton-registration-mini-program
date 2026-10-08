@@ -36,6 +36,21 @@ badminton-app/
 - **发布与回滚**：见 `badminton-app/RELEASE.md`（含云函数发布/回滚与小程序回滚）
 - **cloudbaserc 真源**：以 `badminton-app/cloudfunctions/cloudbaserc.json` 为唯一真源，根清单仅兼容保留
 
+## 常用命令
+
+以下命令均在 `badminton-app/` 目录下执行（除注明外）：
+
+| 命令 | 作用 |
+|------|------|
+| `npm run lint` | ESLint 静态检查 |
+| `npm run test` | 静态检查脚本（`scripts/check-static.js`） |
+| `npm run smoke` | 云函数冒烟测试（`scripts/smoke-fn.js`） |
+| `npm run check:components` | 组件一致性检查 |
+| `npm run check:fn-consistency` | 云函数一致性检查 |
+| `node cloudfunctions/sync-shared.js` | 同步 `_shared` 共享模块到各云函数 |
+| `node scripts/gen-fn-doc.js` | 生成 `docs/云函数清单.md` |
+| `node scripts/inject-env.js`（仓库根目录执行） | 将根 `.env` 注入 `badminton-app/cloudbaserc.json` 的 envVariables |
+
 ## 文档索引
 
 | 文档 | 路径 |

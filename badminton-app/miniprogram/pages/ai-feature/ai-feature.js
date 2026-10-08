@@ -6,7 +6,8 @@ Page({
     suggestions: [],
     isTemplate: false,
     loading: false,
-    generating: false
+    generating: false,
+    loadError: false
   },
 
   onLoad: function(options) {
@@ -16,7 +17,7 @@ Page({
   generate: function() {
     var that = this;
     if (that.data.generating) return;
-    that.setData({ generating: true, loading: true });
+    that.setData({ generating: true, loading: true, loadError: false });
     callFunction('photo-feature', 'listFeatured', { activityId: that.data.activityId })
       .then(function(data) {
         // AI-46/48: callFunction 返回信封 { success, data, message }，需解包一层
@@ -30,9 +31,15 @@ Page({
         that.setData({ suggestions: list, isTemplate: false, loading: false, generating: false });
       })
       .catch(function() {
-        that.setData({ loading: false, generating: false });
+        // BUG-46: 生成失败展示可重试错误态
+        that.setData({ loading: false, generating: false, loadError: true });
         wx.showToast({ title: '生成失败', icon: 'none' });
       });
+  },
+
+  // BUG-46: 加载失败后重新生成
+  retryLoad: function() {
+    this.generate();
   },
 
   toggle: function(e) {
@@ -82,6 +89,13 @@ Page({
     return {
       title: 'AI 精选照片',
       path: '/pages/ai-feature/ai-feature?activityId=' + this.data.activityId
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: 'AI 精选照片',
+      query: 'activityId=' + this.data.activityId
     };
   }
 });

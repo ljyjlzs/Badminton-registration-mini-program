@@ -4,6 +4,10 @@
   "private": true,
   "description": "羽毛球报名小程序（构建期脚本入口）",
   "scripts": {
-    "check:components": "node scripts/check-components.js"
+    "lint": "eslint .",
+    "test": "node scripts/check-static.js",
+    "smoke": "node scripts/smoke-fn.js",
+    "check:components": "node scripts/check-components.js",
+    "check:fn-consistency": "node scripts/check-fn-consistency.js"
   }
 }

@@ -1,5 +1,10 @@
 <view class="court-page">
-  <view wx:if="{{loading}}" class="loading">加载中...</view>
+  <view wx:if="{{loadError}}" class="load-error">
+    <text>加载失败，请重试</text>
+    <button bindtap="retryLoad">重新加载</button>
+  </view>
+
+  <view wx:elif="{{loading}}" class="loading">加载中...</view>
 
   <block wx:else>
     <view wx:if="{{isOrganizer && !courts.length}}" class="config-panel">

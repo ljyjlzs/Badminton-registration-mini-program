@@ -1,0 +1,9 @@
+**/node_modules/**
+**/miniprogram_npm/**
+miniprogram/images/**
+package-lock.json
+cloudbaserc.json
+cloudfunctions/cloudbaserc.json
+cloudfunctions/*/cloudbaserc.json
+*.wxml
+*.wxss

@@ -6,7 +6,8 @@ Page({
     note: '',
     title: '',
     source: '',
-    loading: false
+    loading: false,
+    loadError: false
   },
 
   onLoad: function(options) {
@@ -38,7 +39,7 @@ Page({
   generate: function() {
     var that = this;
     if (that.data.loading) return;
-    that.setData({ loading: true });
+    that.setData({ loading: true, loadError: false });
     callFunction('photo-ai-note', 'batchAiNote', { activityId: that.data.activityId })
       .then(function(data) {
         // AI-47/48: callFunction 返回信封 { success, data, message }，需解包一层
@@ -56,7 +57,8 @@ Page({
         }
       })
       .catch(function() {
-        that.setData({ loading: false });
+        // BUG-46: 生成失败展示可重试错误态
+        that.setData({ loading: false, loadError: true });
         wx.showToast({ title: '生成失败', icon: 'none' });
       });
   },
@@ -81,8 +83,27 @@ Page({
     this.generate();
   },
 
+  // BUG-46: 统一重试入口
+  retryLoad: function() {
+    this.generate();
+  },
+
   copy: function() {
     if (!this.data.note) return;
     wx.setClipboardData({ data: this.data.note });
+  },
+
+  onShareAppMessage: function() {
+    return {
+      title: 'AI相册小记',
+      path: '/pages/ai-note-preview/ai-note-preview?activityId=' + (this.data.activityId || '')
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: 'AI相册小记',
+      query: 'activityId=' + (this.data.activityId || '')
+    };
   }
 });

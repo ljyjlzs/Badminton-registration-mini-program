@@ -10,7 +10,6 @@ const { callVision } = require('./ai.js');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
-const _ = db.command;
 
 async function noteOne(photoId, prompt) {
   const photo = await db.collection('photos').doc(photoId).get();
@@ -36,6 +35,7 @@ async function noteOne(photoId, prompt) {
     // 降采样失败或 jimp 未安装时回退原图；若体积过大可在此跳过（fileContent.length > 500*1024）
     base64 = dl.fileContent.toString('base64');
   }
+  if (!process.env.AI_VISION_MODEL) { throw new Error('AI_VISION_MODEL 未配置，视觉功能不可用'); }
   // AI-24: 失败写 __failed__ 标记，避免空 note 被反复捞出重试
   const note = await callVision(base64, prompt);
   await db.collection('photos').doc(photoId).update({ data: { aiNote: note, aiNotedAt: db.serverDate() } });
@@ -92,22 +92,44 @@ exports.main = async (event) => {
     logger.error('photo-ai-note', (typeof action !== 'undefined' ? action : '-'), { err: e });
         return { success: false, message: e.message || '仅组织者可生成 AI 小记' };
       }
-      // AI-24: 过滤掉 __failed__ 标记，失败图片不再重试；limit 降为 3 防止批量超时
-      const list = await db.collection('photos').where({ activityId, aiNote: _.in([null, '']) }).limit(3).get();
+      // AI-17: 返回活动全部照片（含已有 aiNote 的），避免重进页面时卡片消失；
+      // 仅对未生成笔记的照片调用视觉模型，已有的原样返回；AI-24: __failed__ 不再重试
+      const MAX_FETCH = 100;
+      const MAX_NEW_PER_BATCH = 3;
+      const list = await db.collection('photos').where({ activityId }).limit(MAX_FETCH).get();
       const results = [];
       // AI-25: 累计耗时熔断，防止批量处理拖垮云函数超时
       const batchStart = Date.now();
+      let newCount = 0;
       for (const p of list.data || []) {
-        if (Date.now() - batchStart > 22000) break;
+        const existing = typeof p.aiNote === 'string' ? p.aiNote : '';
+        const isFailed = existing === '__failed__';
+        const hasNote = !!existing && !isFailed;
+        if (hasNote) {
+          // 已有笔记原样返回（hasNote: true），不重复调用视觉模型
+          results.push({ photoId: p._id, aiNote: existing, hasNote: true });
+          continue;
+        }
+        if (isFailed) {
+          // AI-24: 失败标记照片不重试，返回空笔记占位（hasNote: false）
+          results.push({ photoId: p._id, aiNote: '', hasNote: false, error: 'skip' });
+          continue;
+        }
+        if (newCount >= MAX_NEW_PER_BATCH || Date.now() - batchStart > 22000) {
+          // 超出本批生成额度/熔断：仍返回占位（hasNote: false），下次再生成
+          results.push({ photoId: p._id, aiNote: '', hasNote: false });
+          continue;
+        }
+        newCount += 1;
         try {
-          results.push({ photoId: p._id, aiNote: await noteOne(p._id, prompt) });
+          results.push({ photoId: p._id, aiNote: await noteOne(p._id, prompt), hasNote: true });
         } catch (e) {
     logger.error('photo-ai-note', (typeof action !== 'undefined' ? action : '-'), { err: e });
-          // AI-24: 失败写标记，下次不再被 _.in([null,'']) 捞出
+          // AI-24: 失败写标记，下次不再重试
           if (e.message === 'AI_EMPTY_VISION' || e.message === 'AI_TIMEOUT' || e.message === 'AI_JSON_PARSE') {
             await db.collection('photos').doc(p._id).update({ data: { aiNote: '__failed__', aiNotedAt: db.serverDate() } }).catch(function() {});
           }
-          results.push({ photoId: p._id, error: 'skip' });
+          results.push({ photoId: p._id, aiNote: '', hasNote: false, error: 'skip' });
         }
       }
       return { success: true, data: { results }, message: 'ok' };

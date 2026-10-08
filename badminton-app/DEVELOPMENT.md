@@ -1,5 +1,12 @@
 # 羽毛球小程序开发记录
 
+> 入口见仓库根 README.md
+
+> **订正（2026-10-08，ENG-06）**：challenge 系列已下线。以下已删云函数的条目均标注为历史记录，
+> 不代表现状：`start-challenge`、`start-final`、`create-challenge-match`、`get-challenge-data`、
+> `confirm-score`、`set-team-name`、`start-match`、`update-user-level`、`clear-database`。
+> 现行云函数清单见 `docs/云函数清单.md`（`node scripts/gen-fn-doc.js` 生成）。
+
 ## 最新修改日期
 2026-03-24
 
@@ -7,16 +14,16 @@
 
 ### 最新完成功能
 
-#### 1. 挑战赛和决赛功能
-- [x] start-challenge 云函数 - 创建挑战赛
-- [x] start-final 云函数 - 创建决赛（新建）
-- [x] confirm-score 积分计算 - 挑战赛胜+10分，决赛胜+15分
+#### 1. 挑战赛和决赛功能（已废弃，历史记录）
+- [x] ~~start-challenge 云函数 - 创建挑战赛~~（已删除）
+- [x] ~~start-final 云函数 - 创建决赛（新建）~~（已删除）
+- [x] ~~confirm-score 积分计算 - 挑战赛胜+10分，决赛胜+15分~~（已删除）
 - [x] 前端UI - 开始挑战赛/决赛按钮
 - [x] 挑战赛/决赛样式
 
 #### 2. Bug修复
 - [x] submit-score 队伍判断逻辑修复
-- [x] confirm-score 权限验证修复
+- [x] ~~confirm-score 权限验证修复~~（函数已删除）
 - [x] 排名数据去重修复
 - [x] 记分页面返回按钮修复
 - [x] 排名页面无限循环修复
@@ -31,11 +38,10 @@
 cloudfunctions/
 ├── start-grouping/         # 添加 team1_players, team2_players 字段 / 修复重复队伍问题 / 双打组队逻辑
 ├── submit-score/          # 修复队伍判断逻辑
-├── confirm-score/         # 挑战赛积分计算
-├── start-challenge/       # 创建挑战赛比赛
-├── start-final/           # 创建决赛（新建）
 └── get-rankings/         # 排名去重修复
 ```
+
+> ~~confirm-score/ start-challenge/ start-final/~~ 已删除，无需部署。完整清单见 `docs/云函数清单.md`。
 
 ### 2026-03-25 样式优化
 
@@ -84,8 +90,11 @@ cloudfunctions/
 ### 功能流程
 
 ```
-报名中 → 分组中 → 比赛中 → 挑战赛 → 决赛 → 已结束
+报名中 → 分组中 → 比赛中 → 已结束
 ```
+
+> 历史流程含挑战赛/决赛（`报名中 → 分组中 → 比赛中 → 挑战赛 → 决赛 → 已结束`），
+> 随 challenge 系列下线已废弃。
 
 ### 比赛状态
 - pending: 待开始
@@ -95,8 +104,8 @@ cloudfunctions/
 
 ### 积分规则
 - 小组赛：胜者+比分差，败者-比分差
-- 挑战赛：胜者+10分，败者+0分
-- 决赛：胜者+15分，败者+0分
+- ~~挑战赛：胜者+10分，败者+0分~~（已废弃，挑战赛已下线）
+- ~~决赛：胜者+15分，败者+0分~~（已废弃，决赛已下线）
 
 ---
 
@@ -124,9 +133,9 @@ cloudfunctions/
 #### 代码审查通过 ✓
 
 1. **云函数验证 (全部通过)**
-   - start-challenge: 169行，创建挑战赛逻辑正确
-   - start-final: 145行，创建决赛逻辑正确
-   - confirm-score: 176行，积分计算逻辑正确
+   - ~~start-challenge: 169行，创建挑战赛逻辑正确~~（函数已删除）
+   - ~~start-final: 145行，创建决赛逻辑正确~~（函数已删除）
+   - ~~confirm-score: 176行，积分计算逻辑正确~~（函数已删除）
    - submit-score: 141行，队伍判断逻辑已修复
    - get-rankings: 175行，排名去重逻辑已修复
    - start-grouping: 包含 team1_players, team2_players 字段
@@ -138,8 +147,8 @@ cloudfunctions/
 
 3. **积分计算逻辑验证 (正确)**
    - 小组赛：胜者+比分差，败者-比分差
-   - 挑战赛：胜者+10分，败者+0分
-   - 决赛：胜者+15分，败者+0分
+   - ~~挑战赛：胜者+10分，败者+0分~~（已废弃）
+   - ~~决赛：胜者+15分，败者+0分~~（已废弃）
 
 ### 待实际部署测试
 
@@ -147,8 +156,8 @@ cloudfunctions/
 2. [ ] 测试单打队伍数量（3人应为3队）
 3. [ ] 测试双打队伍数量（4人应为2队）
 4. [ ] 测试小组赛流程
-5. [ ] 测试挑战赛流程
-6. [ ] 测试决赛流程
+5. ~~测试挑战赛流程~~（已废弃）
+6. ~~测试决赛流程~~（已废弃）
 7. [ ] 验证排名数据正确
 
 ---
@@ -179,10 +188,33 @@ users          # 用户
 ### 后端修改
 - `cloudfunctions/start-grouping/index.js` - 添加 team1_players, team2_players
 - `cloudfunctions/submit-score/index.js` - 修复队伍判断
-- `cloudfunctions/confirm-score/index.js` - 挑战赛积分计算
-- `cloudfunctions/start-challenge/index.js` - 创建挑战赛
-- `cloudfunctions/start-final/index.js` - 创建决赛（新建）
+- ~~`cloudfunctions/confirm-score/index.js` - 挑战赛积分计算~~（文件已删除）
+- ~~`cloudfunctions/start-challenge/index.js` - 创建挑战赛~~（文件已删除）
+- ~~`cloudfunctions/start-final/index.js` - 创建决赛（新建）~~（文件已删除）
 - `cloudfunctions/get-rankings/index.js` - 排名去重
+
+---
+
+## 常用命令
+
+在 `badminton-app/` 目录下执行：
+
+```bash
+# ESLint 静态检查（配置见 eslint.config.js，只报错不改风格）
+npm run lint          # = eslint .
+
+# 五项静态检查（构建期，纯本地无网络；有错误退出码为 1）
+npm test              # = node scripts/check-static.js
+#   检查项：WXML 语法 / require 相对路径存在 / usingComponents 路径存在 /
+#           JSON 格式 / JS 语法（逐文件 node --check）
+
+# 云函数运行时冒烟（只读 action，校验 success/data/message 包络）
+npm run smoke         # = node scripts/smoke-fn.js
+#   未安装 @cloudbase/node-sdk 时仅打印用例列表；
+#   npm i -D @cloudbase/node-sdk 并设置 TCB_ENV_ID 后发起真实调用
+```
+
+另有组件声明一致性校验：`npm run check:components`（BUG-81，wxml 自定义标签与本页 json 的 usingComponents 逐页比对）。
 
 ---
 

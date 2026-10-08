@@ -5,6 +5,8 @@ var app = getApp();
 Page({
   data: {
     loading: true,
+    loadError: false,
+    photoImgError: false,
     photo: null,
     comments: [],
     commentText: '',
@@ -34,7 +36,7 @@ Page({
 
   loadData: function() {
     var self = this;
-    self.setData({ loading: true });
+    self.setData({ loading: true, loadError: false, photoImgError: false });
 
     callFunction('photo-upload', 'list', { activityId: self.activityId }).then(function(photoData) {
       var pd = (photoData.data || photoData);
@@ -60,8 +62,14 @@ Page({
       }).catch(function() {});
     }).catch(function(e) {
       wx.showToast({ title: (e && e.message) || '加载失败', icon: 'none' });
-      self.setData({ loading: false });
+      // BUG-46: 加载失败展示可重试错误态
+      self.setData({ loading: false, loadError: true });
     });
+  },
+
+  // BUG-46: 加载失败后重新加载
+  retryLoad: function() {
+    this.loadData();
   },
 
   toggleLike: function() {
@@ -130,8 +138,23 @@ Page({
     });
   },
 
-  // UX-16: 图片加载失败简单处理
+  // UX-16: 图片加载失败兜底 — 隐藏破图
   onImgError: function(e) {
     console.warn('图片加载失败', e && e.detail);
+    this.setData({ photoImgError: true });
+  },
+
+  onShareAppMessage: function() {
+    return {
+      title: '照片详情',
+      path: '/pages/photo-detail/photo-detail?photoId=' + (this.photoId || '') + (this.activityId ? '&activityId=' + this.activityId : '')
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: '照片详情',
+      query: 'photoId=' + (this.photoId || '') + (this.activityId ? '&activityId=' + this.activityId : '')
+    };
   }
 });

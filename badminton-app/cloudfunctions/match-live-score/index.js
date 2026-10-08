@@ -6,6 +6,7 @@
 const cloud = require('wx-server-sdk');
 
 const logger = require('./logger');
+const { requireArr } = require('./validate.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const db = cloud.database();
@@ -36,6 +37,11 @@ exports.main = async (event) => {
     if (action === 'update') {
       const { matchId, team1Score, team2Score, teamAScore, teamBScore, subscribers } = payload;
       if (!matchId) return { success: false, message: 'matchId 不能为空' };
+      // SEC-06: 数组入参长度校验（UX-02 后 subscribers 不再被信任使用，仍做入参约束）
+      if (subscribers != null) {
+        const subsCheck = requireArr(subscribers, 'subscribers');
+        if (!subsCheck.ok) return { success: false, message: subsCheck.message };
+      }
       const t1 = team1Score != null ? team1Score : teamAScore;
       const t2 = team2Score != null ? team2Score : teamBScore;
       const match = await db.collection('matches').doc(matchId).get();
@@ -58,6 +64,8 @@ exports.main = async (event) => {
       } catch (e) {
     logger.error('match-live-score', (typeof action !== 'undefined' ? action : '-'), { err: e }); subs = []; }
       let pushed = 0;
+      // BUG-44：跳过推送时返回 pushSkipped 标记，避免静默
+      let pushSkipped = false;
       if (tmpl && subs.length > 0) {
         for (const uid of subs) {
           try {
@@ -70,11 +78,14 @@ exports.main = async (event) => {
           } catch (e) {
     logger.error('match-live-score', (typeof action !== 'undefined' ? action : '-'), { err: e }); /* ignore */ }
         }
-      } else if (!tmpl) {
-        // BUG-44：模板 ID 未配置时不再静默跳过，留下可排查的错误日志
-        console.error('[match-live-score] 未配置 LIVE_SCORE_TEMPLATE_ID，跳过订阅消息推送');
+      } else {
+        // BUG-44：跳过推送时不再静默——标记 pushSkipped，模板未配置时留下可排查的错误日志
+        pushSkipped = true;
+        if (!tmpl) {
+          logger.error('match-live-score', (typeof action !== 'undefined' ? action : '-'), { err: 'LIVE_SCORE_TEMPLATE_ID 未配置，跳过订阅消息推送' });
+        }
       }
-      return { success: true, data: { matchId, team1Score: t1, team2Score: t2, pushed }, message: 'ok' };
+      return { success: true, data: { matchId, team1Score: t1, team2Score: t2, pushed, pushSkipped }, message: 'ok' };
     }
     if (action === 'clear') {
       const { matchId } = payload;

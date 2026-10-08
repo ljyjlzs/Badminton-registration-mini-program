@@ -5,6 +5,8 @@
 const cloud = require('wx-server-sdk');
 
 const logger = require('./logger');
+// ENG-11: 默认等级常量（由 sync-shared.js 复制）
+const { DEFAULT_LEVEL } = require('./constants.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const db = cloud.database();
@@ -51,12 +53,12 @@ exports.main = async (event) => {
       const members = asg.map(a => {
         assignedIds.add(a.userId);
         const u = umap[a.userId] || {};
-        return { userId: a.userId, registrationId: a.registrationId, nickname: u.nickname || '球友', level: u.level || 5 };
+        return { userId: a.userId, registrationId: a.registrationId, nickname: u.nickname || '球友', level: u.level || DEFAULT_LEVEL };
       });
       courtsOut.push({ courtId: c._id, courtNo: c.courtNo, label: c.label, capacity: c.capacity, members });
     }
     const unassigned = (regs.data || []).filter(r => !assignedIds.has(r.userId))
-      .map(r => { const u = umap[r.userId] || {}; return { userId: r.userId, nickname: u.nickname || '球友', level: u.level || 5 }; });
+      .map(r => { const u = umap[r.userId] || {}; return { userId: r.userId, nickname: u.nickname || '球友', level: u.level || DEFAULT_LEVEL }; });
     return { success: true, data: { courts: courtsOut, unassigned, isOrganizer: act.data.organizerId === openid }, message: 'ok' };
   } catch (err) {
     logger.error('court-list', (typeof action !== 'undefined' ? action : '-'), { err: err });

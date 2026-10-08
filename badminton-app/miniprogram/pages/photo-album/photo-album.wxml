@@ -1,5 +1,10 @@
 <view class="album-page">
-  <view wx:if="{{loading}}" class="album-loading">
+  <view wx:if="{{loadError}}" class="load-error">
+    <text>加载失败，请重试</text>
+    <button bindtap="retryLoad">重新加载</button>
+  </view>
+
+  <view wx:elif="{{loading}}" class="album-loading">
     <view class="loading-spinner"></view>
     <text style="color:#8d9a95">加载中...</text>
   </view>
@@ -113,7 +118,7 @@
       <view style="padding: 24rpx; text-align: center; border-bottom: 1rpx solid #f0f0f0;" bindtap="contextDeletePhoto">删除照片</view>
       <view style="padding: 24rpx; text-align: center; border-bottom: 1rpx solid #f0f0f0;" bindtap="toggleLike">{{contextLiked ? '取消点赞' : '点赞'}} ({{contextLikeCount || 0}})</view>
       <view style="padding: 24rpx; text-align: center; border-bottom: 1rpx solid #f0f0f0;" bindtap="openComments">评论</view>
-      <view style="padding: 24rpx; text-align: center; border-bottom: 1rpx solid #f0f0f0;" bindtap="contextToggleFeatured">{{contextFeatured ? '取消精选' : '设为精选'}}</view>
+      <view style="padding: 24rpx; text-align: center; border-bottom: 1rpx solid #f0f0f0;" bindtap="toggleFeatured" data-id="{{contextPhotoId}}">{{contextFeatured ? '取消精选' : '设为精选'}}</view>
       <view style="padding: 24rpx; text-align: center; color: #999;" bindtap="closeContextMenu">取消</view>
     </view>
   </view>

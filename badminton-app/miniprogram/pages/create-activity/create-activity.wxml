@@ -12,6 +12,11 @@
       <button class="ai-entry-btn" bindtap="parseActivity">发送</button>
     </view>
 
+    <view wx:if="{{loadError}}" class="load-error">
+      <text>加载失败，请重试</text>
+      <button bindtap="retryLoad">重新加载</button>
+    </view>
+
     <ai-suggestion
       wx:if="{{aiSuggestion.show}}"
       title="{{aiSuggestion.title}}"
@@ -37,7 +42,7 @@
         <input
           class="form-input"
           placeholder="请输入活动名称"
-          maxlength="50"
+          maxlength="40"
           value="{{name}}"
           bindinput="onNameInput"/>
       </view>

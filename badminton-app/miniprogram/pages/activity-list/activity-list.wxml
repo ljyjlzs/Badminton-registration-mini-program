@@ -62,6 +62,10 @@
   </view>
 
   <view class="content">
+    <view wx:if="{{loadError}}" class="load-error">
+      <text>加载失败，请重试</text>
+      <button bindtap="retryLoad">重新加载</button>
+    </view>
     <view wx:if="{{currentTab === 'created'}}" class="activity-section">
       <view wx:if="{{loading}}" class="loading">
         <view class="loading-spinner"></view>

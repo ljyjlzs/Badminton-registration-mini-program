@@ -57,6 +57,8 @@ Page({
     // tabBar 页面不支持 url 参数，通过 globalData 传递
     if (app.globalData.isLoggedIn) {
       this.loadActivities();
+      // PERF-18: 首轮加载去重——onLoad 已拉取，置位避免 onShow 再跑（防止重复 setData）
+      this._firstShowDone = true;
     }
   },
 
@@ -76,18 +78,15 @@ Page({
       });
       return;
     }
-    // PERF-21: 首次 onShow 照常加载（onLoad 已加载过则跳过，避免双跑）
+    // PERF-18: 首轮去重——onLoad 已加载则直接跳过，避免重复 setData
     if (!this._firstShowDone) {
       this._firstShowDone = true;
       if (this._lastLoadAt) return;
       this.loadActivities();
       return;
     }
-    // PERF-21: 60 秒内重复进入且已有数据，不全量刷新
-    const hasData = (this.data.myCreatedActivities || []).length > 0 ||
-      (this.data.myJoinedActivities || []).length > 0 ||
-      (this.data.availableActivities || []).length > 0;
-    if (hasData && Date.now() - this._lastLoadAt < 60000) return;
+    // PERF-18/PERF-21: 15 秒内重复进入不全量刷新（onPullDownRefresh/retryLoad 强制绕过）
+    if (Date.now() - (this._lastLoadAt || 0) < 15000) return;
     this.loadActivities();
   },
 
@@ -100,22 +99,31 @@ Page({
     this._lastLoadAt = Date.now();
     this.setData({ loading: true, loadError: false });
 
-    // 加载我创建的活动
-    callFunction('get-activities', 'list', { type: 'organized', page: 1, pageSize: 20 }).then(res => {
-      if (res.success) {
-        this.setData({ myCreatedActivities: this.withFormattedTime((res.data && res.data.list) || []) });
-        this.applyFilter();
-      }
-    }).catch(() => {
-      this.setData({ loadError: true });
-    });
+    // PERF-18: 合并 setData——三类列表并行拉取，全部 settle 后一次提交（原先 3 次独立 setData + 3 次 applyFilter）
+    let hasError = false;
+    const settled = (type) =>
+      callFunction('get-activities', 'list', { type: type, page: 1, pageSize: 20 }).catch(() => {
+        hasError = true;
+        return null;
+      });
 
-    // 加载我参加的活动
-    callFunction('get-activities', 'list', { type: 'joined', page: 1, pageSize: 20 }).then(res => {
-      this.setData({ loading: false });
-      if (res.success) {
+    Promise.all([
+      settled('organized'),
+      settled('joined'),
+      settled('available')
+    ]).then(([createdRes, joinedRes, availableRes]) => {
+      const patch = { loading: false };
+      if (hasError) patch.loadError = true;
+
+      // 我创建的活动
+      if (createdRes && createdRes.success) {
+        patch.myCreatedActivities = this.withFormattedTime((createdRes.data && createdRes.data.list) || []);
+      }
+
+      // 我参加的活动
+      if (joinedRes && joinedRes.success) {
         var self = this;
-        var joined = this.withFormattedTime((res.data && res.data.list) || []).map(function(item) {
+        var joined = this.withFormattedTime((joinedRes.data && joinedRes.data.list) || []).map(function(item) {
           var ts = self.parseTime(item.time);
           var daysLeft = 0;
           if (ts) {
@@ -128,30 +136,34 @@ Page({
           }
           return Object.assign({}, item, { daysLeft: daysLeft });
         });
-        this.setData({ myJoinedActivities: joined });
-        this.applyFilter();
+        patch.myJoinedActivities = joined;
       }
-    }).catch(() => {
-      this.setData({ loading: false, loadError: true });
-    });
 
-    // 加载可参加的活动（用于查找活动tab）
-    callFunction('get-activities', 'list', { type: 'available', page: 1, pageSize: 20 }).then(res => {
-      if (res.success) {
-        var available = this.withFormattedTime((res.data && res.data.list) || []);
-        this.setData({ availableActivities: available, availableHasMore: (res.data && res.data.hasMore) || false, availablePage: 1 });
+      // 可参加的活动（用于查找活动tab）
+      if (availableRes && availableRes.success) {
+        var available = this.withFormattedTime((availableRes.data && availableRes.data.list) || []);
+        patch.availableActivities = available;
+        patch.availableHasMore = (availableRes.data && availableRes.data.hasMore) || false;
+        patch.availablePage = 1;
         if (this.data.currentTab === 'search' && !this.data.searchKeyword) {
-          this.setData({ searchResults: available });
+          patch.searchResults = available;
         }
       }
-    }).catch(() => {
-      this.setData({ loadError: true });
-    });
 
-    // 如果在搜索tab，重新搜索
-    if (this.data.currentTab === 'search' && this.data.searchKeyword) {
-      this.doCloudSearch();
-    }
+      // PERF-18: 一次 setData 写入全部结果，再统一刷新筛选视图（applyFilter 只跑一次）
+      this.setData(patch);
+      this.applyFilter();
+
+      // 如果在搜索tab，重新搜索
+      if (this.data.currentTab === 'search' && this.data.searchKeyword) {
+        this.doCloudSearch();
+      }
+    });
+  },
+
+  // BUG-46: 加载失败后重新加载
+  retryLoad: function() {
+    this.loadActivities();
   },
 
   withFormattedTime: function(list) {

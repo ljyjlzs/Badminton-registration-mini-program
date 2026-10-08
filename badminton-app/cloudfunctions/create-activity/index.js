@@ -9,6 +9,8 @@ const logger = require('./logger');
 const https = require('https');
 const { rateLimit } = require('./rateLimit.js');
 const { requireStr, LIMITS } = require('./validate.js');
+// ENG-11: 活动上限常量（由 sync-shared.js 复制）
+const { ACTIVITY_LIMITS } = require('./constants.js');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
@@ -104,7 +106,7 @@ async function doCreate(payload, openid) {
   if (!['singles', 'doubles', 'fixed-doubles', 'court-doubles'].includes(activityType)) {
     activityType = 'doubles';
   }
-  const minPlayers = activityType === 'singles' ? 3 : 4;
+  const minPlayers = activityType === 'singles' ? 3 : ACTIVITY_LIMITS.MIN_PLAYERS;
 
   let maxP = maxPlayers;
   let playersPerCourtVal = null;
@@ -120,7 +122,7 @@ async function doCreate(payload, openid) {
     maxP = maxPlayers != null ? Number(maxPlayers) : 8;
     if (isNaN(maxP)) maxP = 8;
     if (maxP < minPlayers) return { success: false, message: '报名人数上限不能低于 ' + minPlayers + ' 人' };
-    if (maxP > 100) return { success: false, message: '报名人数上限不能超过 100 人' };
+    if (maxP > ACTIVITY_LIMITS.MAX_PLAYERS) return { success: false, message: '报名人数上限不能超过 ' + ACTIVITY_LIMITS.MAX_PLAYERS + ' 人' };
   }
 
   const joinCode = (Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3)).toUpperCase();

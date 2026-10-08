@@ -80,7 +80,8 @@ exports.main = async (event, context) => {
 
     return {
       success: true,
-      data: rows.slice(-50)
+      data: rows.slice(-50),
+      message: 'ok'
     };
   } catch (err) {
     logger.error('ai-history', (typeof action !== 'undefined' ? action : '-'), { err: err });

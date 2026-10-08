@@ -1,5 +1,6 @@
 const cloud = require('wx-server-sdk');
 const logger = require('./logger');
+const { requireArr } = require('./validate.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 var db = cloud.database();
 var _ = db.command;
@@ -21,6 +22,9 @@ exports.main = async function(event, context) {
     var fields = payload.fields;
     var wantFields = Array.isArray(fields) && fields.length > 0;
     if (wantFields) {
+      // SEC-06: 数组入参长度校验
+      var fieldsCheck = requireArr(fields, 'fields');
+      if (!fieldsCheck.ok) return { success: false, message: fieldsCheck.message };
       var needRegs = fields.indexOf('registrations') !== -1
         || fields.indexOf('userRegistration') !== -1
         || fields.indexOf('waitlist') !== -1

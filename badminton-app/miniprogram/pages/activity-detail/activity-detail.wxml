@@ -5,6 +5,11 @@
     <text>加载中...</text>
   </view>
 
+  <view wx:if="{{loadError}}" class="load-error">
+    <text>加载失败，请重试</text>
+    <button bindtap="retryLoad">重新加载</button>
+  </view>
+
   <view wx:if="{{!loading && activity}}" class="detail-shell">
     <view wx:if="{{globalBannerVisible}}" class="global-banner">
       <view wx:if="{{globalCurrentText}}" class="global-banner-row live" bindtap="onGlobalBannerTap">
@@ -48,10 +53,14 @@
           <text class="overview-label">地点</text>
           <text class="overview-value">{{activity.location}}</text>
         </view>
-        <view class="overview-item time-cell" bindtap="addCalendar">
+        <view wx:if="{{activity.formattedTime && activity.formattedTime !== '待定'}}" class="overview-item time-cell" bindtap="addCalendar">
           <text class="overview-label">时间</text>
-          <text class="overview-value">{{activity.formattedTime || '待定'}}</text>
+          <text class="overview-value">{{activity.formattedTime}}</text>
           <text class="calendar-hint">点击加入日历</text>
+        </view>
+        <view wx:else class="overview-item">
+          <text class="overview-label">时间</text>
+          <text class="overview-value">待定</text>
         </view>
         <view class="overview-item">
           <text class="overview-label">赛制</text>
@@ -193,8 +202,8 @@
               <text wx:elif="{{activity.type === 'fixed-doubles'}}" class="partner-tag">待配搭档</text>
               <text
                 wx:if="{{activity.type === 'fixed-doubles' && item.partnerId && userRegistration && item.id === userRegistration.id}}"
-                class="cancel-request-tag"
-                style="background:#ffebee;color:#c62828;padding:4rpx 12rpx;border-radius:8rpx;font-size:22rpx;margin-top:0;margin-left:8rpx;"
+                class="cancel-request-tag unbind-partner-hotzone"
+                style="background:#ffebee;color:#c62828;border-radius:8rpx;margin-top:0;margin-left:8rpx;"
                 bindtap="unbindPartner">解绑搭档</text>
             </view>
             <view class="level-badge level-{{item.level || 5}}">Lv.{{item.level || 5}}</view>
@@ -633,7 +642,7 @@
         <view class="form-item avatar-form-item">
           <view class="form-label">头像</view>
           <block wx:if="{{inputAvatar}}">
-            <image class="avatar-preview" src="{{inputAvatar}}" mode="aspectFill"></image>
+            <image class="avatar-preview" src="{{inputAvatar}}" mode="aspectFill" lazy-load binderror="onImgError" data-img-key="inputAvatar"></image>
             <text class="avatar-change-hint" bindtap="onResetJoinAvatar">重新选择</text>
           </block>
           <button

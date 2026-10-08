@@ -2,12 +2,14 @@ var callFunction = require('../../utils/request').callFunction;
 var subscribe = require('../../utils/subscribe.js');
 var share = require('../../utils/share.js');
 
-var REMINDER_POLL_MS = 60000;
+// UX-02：已移除 REMINDER_POLL_MS 常量与 setInterval 轮询，
+// 改为事件驱动一次性检查（onLoad/onShow/wx.onAppShow 触发 checkMatchReminder）。
 
 Page({
   data: {
     activityId: '',
     loading: true,
+    loadError: false,
     matches: [],
     isEmpty: true,
     isOrganizer: false,
@@ -23,6 +25,9 @@ Page({
 
   onLoad: function(options) {
     this._firstShowDone = false;
+    // UX-02：回到前台时做一次性提醒检查（替代原 setInterval 轮询）
+    this._appShowHandler = this.checkMatchReminder.bind(this);
+    wx.onAppShow(this._appShowHandler);
     if (options.activityId) {
       this.setData({ activityId: options.activityId });
       // UX-02：进入赛程页申请订阅，供比赛前提醒
@@ -55,15 +60,23 @@ Page({
       this._firstShowDone = true;
       return;
     }
-    if (this.data.activityId) this.loadMatches();
+    if (this.data.activityId) {
+      // UX-02：回到页面时重新加载并一次性检查提醒（不再依赖 setInterval）
+      this.loadMatches();
+      this.checkMatchReminder();
+    }
   },
 
   onHide: function() {
-    this.stopReminderPolling();
+    // UX-02：轮询已移除，onHide 无需清理定时器
   },
 
   onUnload: function() {
-    this.stopReminderPolling();
+    // UX-02：注销前台事件监听（替代原 stopReminderPolling）
+    if (this._appShowHandler) {
+      wx.offAppShow(this._appShowHandler);
+      this._appShowHandler = null;
+    }
   },
 
   onPullDownRefresh: function() {
@@ -72,7 +85,7 @@ Page({
 
   loadMatches: function(done) {
     var that = this;
-    that.setData({ loading: true });
+    that.setData({ loading: true, loadError: false });
     callFunction('court-matches', 'list', { activityId: that.data.activityId })
       .then(function(res) {
         var data = res.data || res;
@@ -92,19 +105,23 @@ Page({
           activityType: (data.activity && data.activity.type) || '',
           locked: data.activity && (data.activity.status === 'playing' || data.activity.status === 'finished')
         });
-        // 仅在活动未结束时轮询提醒；拿不到 status 时保持轮询
+        // 仅在活动未结束时检查提醒（UX-02：改为一次性事件驱动检查，无轮询）
         if (!data.activity || data.activity.status !== 'finished') {
-          that.startReminderPolling();
-        } else {
-          that.stopReminderPolling();
+          that.checkMatchReminder();
         }
         if (done) done();
       })
       .catch(function(err) {
         console.error('加载赛程失败：', err);
-        that.setData({ loading: false });
+        // BUG-46: 加载失败展示可重试错误态
+        that.setData({ loading: false, loadError: true });
         if (done) done();
       });
+  },
+
+  // BUG-46: 加载失败后重新加载
+  retryLoad: function() {
+    this.loadMatches();
   },
 
   // ===== T15 拖拽排序 =====
@@ -209,25 +226,8 @@ Page({
   },
 
   // ===== 比赛提醒功能 =====
-  startReminderPolling: function() {
-    var that = this;
-    // 按 REMINDER_POLL_MS 间隔检查比赛提醒
-    if (!that._reminderTimer) {
-      that._reminderTimer = setInterval(function() {
-        that.checkMatchReminder();
-      }, REMINDER_POLL_MS);
-    }
-    // 立即检查一次（含 onShow 重新进入时，不必等下一个周期）
-    that.checkMatchReminder();
-  },
-
-  stopReminderPolling: function() {
-    if (this._reminderTimer) {
-      clearInterval(this._reminderTimer);
-      this._reminderTimer = null;
-    }
-  },
-
+  // UX-02：已移除 setInterval 轮询（原 startReminderPolling/stopReminderPolling），
+  // 提醒检查改为一次性事件驱动：onLoad / onShow / wx.onAppShow 各触发一次 checkMatchReminder。
   checkMatchReminder: function() {
     var that = this;
     if (!that.data.activityId) return;

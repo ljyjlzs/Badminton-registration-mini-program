@@ -1,5 +1,7 @@
 # 羽毛球报名小程序 - 发布指南
 
+> 入口见仓库根 README.md
+
 ## 发布前准备
 
 ### 1. 云开发环境配置
@@ -36,15 +38,14 @@
 - get-activities
 - get-activity-detail
 - start-grouping
-- set-team-name
 - submit-score
-- confirm-score
-- start-challenge
-- create-challenge-match
 - get-rankings
 - get-match-detail
-- update-user-level
 - delete-activity
+
+> 完整清单见 `docs/云函数清单.md`（`node scripts/gen-fn-doc.js` 生成）。
+> 以下函数已删除，不存在也无需部署：`set-team-name`、`confirm-score`、`start-challenge`、
+> `create-challenge-match`、`get-challenge-data`、`start-match`、`update-user-level`、`clear-database`。
 
 ### 4. 小程序配置检查
 
@@ -74,8 +75,7 @@
 - 报名参加活动
 - 均衡分组算法
 - 实时比分录入
-- 双方确认机制
-- 小组赛+挑战赛模式
+- 小组赛模式（分组后自动建赛程，challenge 系列已下线）
 - 个人和队伍排名
 
 ### 3. 审核材料准备
@@ -116,8 +116,10 @@
 
 ## 云函数发布
 
+> 约定：只在 `master` 上打 tag，且必须在本次改动全部提交之后打（否则 diff 会算错）。
+
 1. 改动全部提交
-2. 打 annotated tag（message 里列出本次涉及的云函数）：
+2. 在 `master` 分支上打 annotated tag（message 里列出本次涉及的云函数）：
    ```bash
    git tag -a v1.2.0 -m "云函数: join-activity, get-activities"
    git push origin v1.2.0
@@ -135,6 +137,8 @@ bash badminton-app/scripts/rollback-fn.sh v1.1.0
 ## 云函数发布与回滚
 
 ### 发布前打 tag
+
+> 约定：只在 `master` 上打 tag。
 
 ```bash
 git tag -a vYYYYMMDD-n -m "描述"

@@ -8,6 +8,7 @@ var RECOMMEND_CACHE_TTL = 5 * 60 * 1000;
 Page({
   data: {
     loading: true,
+    loadError: false,
     recommendations: [],
     suggestedTime: '',
     aiNote: '',
@@ -28,15 +29,21 @@ Page({
         this.applyResult(recommendCache.data);
         return;
       }
-      this.setData({ loading: true });
+      this.setData({ loading: true, loadError: false });
       const data = await callFunction('recommend-time', 'recommend', {});
       const d = (data && data.data) || data || {};
       recommendCache = { data: d, ts: Date.now() };
       this.applyResult(d);
     } catch (e) {
       wx.showToast({ title: e.message, icon: 'none' });
-      this.setData({ loading: false });
+      // BUG-46: 加载失败展示可重试错误态
+      this.setData({ loading: false, loadError: true });
     }
+  },
+
+  // BUG-46: 加载失败后强制重新加载（绕过模块级缓存）
+  retryLoad() {
+    this.loadData(true);
   },
 
   applyResult(d) {
@@ -65,5 +72,18 @@ Page({
     if (time) {
       wx.setClipboardData({ data: time, success: () => wx.showToast({ title: '已复制时间', icon: 'success' }) });
     }
+  },
+
+  onShareAppMessage() {
+    return {
+      title: '推荐时间',
+      path: '/pages/recommend-time/recommend-time'
+    };
+  },
+
+  onShareTimeline() {
+    return {
+      title: '推荐时间'
+    };
   }
 });

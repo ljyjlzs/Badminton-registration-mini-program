@@ -6,6 +6,8 @@
  */
 const cloud = require('wx-server-sdk');
 const logger = require('./logger');
+// ENG-11: 默认分页常量（由 sync-shared.js 复制）
+const { PAGE_SIZE } = require('./constants.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
@@ -46,7 +48,7 @@ exports.main = async (event) => {
     const { type = 'available', keyword } = payload;
     // BUG-6: pageSize 默认 20，上限 100
     const page = Math.max(Number(payload.page) || 1, 1);
-    const pageSize = Math.min(Math.max(Number(payload.pageSize) || 20, 1), 100);
+    const pageSize = Math.min(Math.max(Number(payload.pageSize) || PAGE_SIZE, 1), 100);
     const skip = (page - 1) * pageSize;
 
     let activities = [];

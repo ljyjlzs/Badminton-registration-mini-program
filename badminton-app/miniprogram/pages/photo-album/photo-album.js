@@ -25,6 +25,7 @@ Page({
   data: {
     loading: true,
     loadingMore: false,
+    loadError: false,
     activityId: '',
     photos: [],
     allPhotos: [],
@@ -154,9 +155,11 @@ Page({
     var page = append ? (self.data.page + 1) : 1;
     if (append && (!self.data.hasMore || self.data.loadingMore)) return;
     if (!silent) {
-      self.setData(append ? { loadingMore: true } : { loading: true });
+      self.setData(append ? { loadingMore: true } : { loading: true, loadError: false });
     } else if (append) {
       self.setData({ loadingMore: true });
+    } else {
+      self.setData({ loadError: false });
     }
 
     Promise.all([
@@ -174,7 +177,8 @@ Page({
       var res = results[0];
       var detail = results[1];
       if (!res || res.success === false) {
-        self.setData({ loading: false, loadingMore: false });
+        // BUG-46: 仅首屏加载失败置 loadError，分页加载失败不打断已有列表
+        self.setData(append ? { loading: false, loadingMore: false } : { loading: false, loadingMore: false, loadError: true });
         return;
       }
       var payload = res.data || {};
@@ -213,8 +217,14 @@ Page({
         albumNote: activity.albumNote || ''
       });
     }).catch(function() {
-      self.setData({ loading: false, loadingMore: false });
+      // BUG-46: 仅首屏加载失败置 loadError
+      self.setData(append ? { loading: false, loadingMore: false } : { loading: false, loadingMore: false, loadError: true });
     });
+  },
+
+  // BUG-46: 加载失败后重新加载
+  retryLoad: function() {
+    this.loadData();
   },
 
   switchTab: function(e) {
@@ -243,6 +253,12 @@ Page({
   goDetail: function(e) {
     var photoId = e.currentTarget.dataset.id;
     if (!photoId) return;
+    // BUG-31: 打开预览时记录 previewId / previewFeatured，供预览入口精选切换使用
+    var photo = this.findPhoto(photoId);
+    this.setData({
+      previewId: photoId,
+      previewFeatured: !!(photo && photo.featured)
+    });
     wx.navigateTo({
       url: '/pages/photo-detail/photo-detail?photoId=' + photoId + '&activityId=' + (this.activityId || '')
     });
@@ -274,12 +290,17 @@ Page({
     });
   },
 
-  // BUG-31: 图片预览入口的精选切换（按 previewFeatured 选 action，以服务端返回为准）
-  toggleFeatured: function() {
+  // BUG-31: 精选切换（预览入口与长按菜单共用）：photoId 优先取事件 data-id、否则取 previewId；
+  // action 按当前精选态选，UI 以服务端返回 res.data.featured 为准（不做本地翻转）
+  toggleFeatured: function(e) {
     var self = this;
-    var photoId = self.data.previewId;
+    var ds = (e && e.currentTarget && e.currentTarget.dataset) || {};
+    var photoId = ds.id || self.data.previewId;
     if (!photoId) return;
-    var action = self.data.previewFeatured ? 'unfeature' : 'feature';
+    var photo = self.findPhoto(photoId);
+    var isFeatured = photo ? !!photo.featured
+      : (photoId === self.data.contextPhotoId ? !!self.data.contextFeatured : !!self.data.previewFeatured);
+    var action = isFeatured ? 'unfeature' : 'feature';
     callFunction('photo-feature', action, { photoId: photoId }).then(function(r) {
       if (!r || r.success === false) {
         wx.showToast({ title: (r && r.message) || '操作失败', icon: 'none' });
@@ -288,7 +309,12 @@ Page({
       var featured = !!(r.data && r.data.featured);
       self._dirty = true;
       self.updatePhotoLocal(photoId, { featured: featured });
-      self.setData({ previewFeatured: featured });
+      self.setData({
+        previewId: photoId,
+        previewFeatured: featured,
+        contextFeatured: featured,
+        showContextMenu: false
+      });
       wx.showToast({ title: featured ? '已设为精选' : '已取消精选', icon: 'success' });
     }).catch(function() {
       wx.showToast({ title: '操作失败', icon: 'none' });
@@ -413,26 +439,6 @@ Page({
           });
         }
       }
-    });
-  },
-
-  contextToggleFeatured: function() {
-    var self = this;
-    var photoId = self.data.contextPhotoId;
-    var action = self.data.contextFeatured ? 'unfeature' : 'feature';
-    callFunction('photo-feature', action, { photoId: photoId }).then(function(r) {
-      if (!r || r.success === false) {
-        wx.showToast({ title: (r && r.message) || '操作失败', icon: 'none' });
-        return;
-      }
-      self._dirty = true;
-      // BUG-31: 以服务端返回为准更新 UI，不再本地翻转
-      var featured = !!(r.data && r.data.featured);
-      self.updatePhotoLocal(photoId, { featured: featured });
-      self.setData({ showContextMenu: false, contextFeatured: featured });
-      wx.showToast({ title: '操作成功', icon: 'success' });
-    }).catch(function() {
-      wx.showToast({ title: '操作失败', icon: 'none' });
     });
   },
 

@@ -13,6 +13,10 @@ Page({
     myActivitiesTotal: 0,
     joinableActivitiesTotal: 0,
     unavailableActivitiesTotal: 0,
+    // UX-25: 可参加活动分页状态（仅此区做触底加载，另两区保留 3 条预览 + 查看全部跳转）
+    joinablePage: 1,
+    joinableHasMore: false,
+    joinableLoadingMore: false,
     loading: true,
     showEditDialog: false,
     editType: 'nickname',
@@ -47,7 +51,7 @@ Page({
       this.loadUserStats();
       return;
     }
-    // PERF-21: 60 秒内重复进入不全量刷新
+    // PERF-18/PERF-21: 15 秒内重复进入不全量刷新
     if (Date.now() - this._lastLoadAt < 15000) return;
     this.loadActivities();
     this.loadUserStats();
@@ -180,20 +184,53 @@ Page({
       fetchList('available'),
       fetchList('unavailable')
     ]).then(([myRes, joinableRes, unavailableRes]) => {
-      const applyList = (res, cacheKey, listKey, totalKey) => {
+      // PERF-18: 合并 setData——三类结果收集到一个 patch，一次提交（原先 4 次独立 setData）
+      const patch = { loading: false };
+      // 我创建的/暂时不能参加：保留 3 条预览 + 查看全部跳转（列表全量在 activity-list 页）
+      const applyPreview = (res, cacheKey, listKey, totalKey) => {
         if (!(res && res.result && res.result.success)) return;
         const d = res.result.data || {};
         const all = d.list || [];
         this[cacheKey] = all;
-        this.setData({
-          [listKey]: all.slice(0, 3),
-          [totalKey]: d.total || all.length
-        });
+        patch[listKey] = all.slice(0, 3);
+        patch[totalKey] = d.total || all.length;
       };
-      applyList(myRes, '_allMyActivities', 'myActivities', 'myActivitiesTotal');
-      applyList(joinableRes, '_allJoinableActivities', 'joinableActivities', 'joinableActivitiesTotal');
-      applyList(unavailableRes, '_allUnavailableActivities', 'unavailableActivities', 'unavailableActivitiesTotal');
-      this.setData({ loading: false });
+      // 可参加的活动：UX-25 完整分页（触底加载更多），不再截断到 3 条
+      const applyJoinable = (res) => {
+        if (!(res && res.result && res.result.success)) return;
+        const d = res.result.data || {};
+        const all = d.list || [];
+        this._allJoinableActivities = all;
+        patch.joinableActivities = all;
+        patch.joinableActivitiesTotal = d.total || all.length;
+        patch.joinablePage = 1;
+        patch.joinableHasMore = !!(d && d.hasMore);
+      };
+      applyPreview(myRes, '_allMyActivities', 'myActivities', 'myActivitiesTotal');
+      applyJoinable(joinableRes);
+      applyPreview(unavailableRes, '_allUnavailableActivities', 'unavailableActivities', 'unavailableActivitiesTotal');
+      this.setData(patch);
+    });
+  },
+
+  // UX-25: 触底加载更多可参加的活动（累加 page，hasMore 控制「加载中…/没有更多了」）
+  onReachBottom: function() {
+    if (!this.data.joinableHasMore || this.data.joinableLoadingMore) return;
+    const nextPage = this.data.joinablePage + 1;
+    this.setData({ joinableLoadingMore: true });
+    request('get-activities', 'list', { type: 'available', page: nextPage, pageSize: 20 }).then(res => {
+      const d = (res && res.result && res.result.data) || {};
+      const more = d.list || [];
+      const existing = this.data.joinableActivities || [];
+      this._allJoinableActivities = (this._allJoinableActivities || []).concat(more);
+      this.setData({
+        joinableActivities: existing.concat(more),
+        joinablePage: nextPage,
+        joinableHasMore: !!d.hasMore,
+        joinableLoadingMore: false
+      });
+    }).catch(() => {
+      this.setData({ joinableLoadingMore: false });
     });
   },
 
@@ -333,8 +370,11 @@ Page({
     });
   },
 
-  // UX-16: 图片加载失败简单处理
+  // UX-16: 图片加载失败兜底 — 回退到首字母占位
   onImgError(e) {
     console.warn('图片加载失败', e && e.detail);
+    if (this.data.userInfo && this.data.userInfo.avatar) {
+      this.setData({ 'userInfo.avatar': '' });
+    }
   }
 });

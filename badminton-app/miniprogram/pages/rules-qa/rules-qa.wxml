@@ -4,6 +4,11 @@
     <text style="font-size: 26rpx; color: rgba(255,255,255,0.8); display: block; margin-top: 8rpx;">有任何规则问题都可以问我</text>
   </view>
 
+  <view wx:if="{{loadError}}" class="load-error">
+    <text>加载失败，请重试</text>
+    <button bindtap="retryLoad">重新加载</button>
+  </view>
+
   <scroll-view class="chat-list" scroll-y scroll-into-view="{{scrollToId}}" style="height: 55vh; padding: 0 16rpx;">
     <view id="msg-{{index}}" wx:for="{{messages}}" wx:key="index" style="margin-bottom: 20rpx;">
       <view wx:if="{{item.role === 'user'}}" style="display: flex; justify-content: flex-end;">

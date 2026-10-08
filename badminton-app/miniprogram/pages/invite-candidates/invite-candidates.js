@@ -3,6 +3,7 @@ const { callFunction } = require('../../utils/request.js');
 Page({
   data: {
     loading: true,
+    loadError: false,
     candidates: [],
     selected: {},
     invites: [],
@@ -17,7 +18,7 @@ Page({
 
   async loadData() {
     try {
-      this.setData({ loading: true });
+      this.setData({ loading: true, loadError: false });
       const data = await callFunction('invite', 'listCandidates', { activityId: this.activityId });
       // AI-36: 校验 success，失败不展示空列表
       if (!data || data.success === false) {
@@ -29,8 +30,14 @@ Page({
       this.setData({ candidates: d.candidates || [], selected, remaining: d.remaining || 0, loading: false });
     } catch (e) {
       wx.showToast({ title: e.message, icon: 'none' });
-      this.setData({ loading: false });
+      // BUG-46: 加载失败展示可重试错误态
+      this.setData({ loading: false, loadError: true });
     }
+  },
+
+  // BUG-46: 加载失败后重新加载
+  retryLoad() {
+    this.loadData();
   },
 
   toggleSelect(e) {
@@ -69,6 +76,12 @@ Page({
     return {
       title: '羽毛球活动邀请',
       path: '/pages/index/index'
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: '羽毛球活动邀请'
     };
   }
 });

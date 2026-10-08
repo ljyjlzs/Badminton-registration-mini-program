@@ -3,6 +3,7 @@ const { callFunction } = require('../../utils/request.js');
 Page({
   data: {
     loading: true,
+    loadError: false,
     activity: null,
     matches: [],
     copy: null,
@@ -16,7 +17,7 @@ Page({
 
   async loadData() {
     try {
-      this.setData({ loading: true });
+      this.setData({ loading: true, loadError: false });
       const detail = await callFunction('get-activity-detail', 'detail', { activityId: this.activityId });
       // AI-36: 校验 success，失败走 catch
       if (!detail || detail.success === false) {
@@ -27,8 +28,14 @@ Page({
       this.setData({ activity: d.activity, matches: finished, loading: false });
     } catch (e) {
       wx.showToast({ title: e.message, icon: 'none' });
-      this.setData({ loading: false });
+      // BUG-46: 加载失败展示可重试错误态
+      this.setData({ loading: false, loadError: true });
     }
+  },
+
+  // BUG-46: 加载失败后重新加载
+  retryLoad() {
+    this.loadData();
   },
 
   async generateCopy() {
@@ -57,6 +64,12 @@ Page({
     return {
       title: '羽毛球活动文案',
       path: '/pages/index/index'
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: '羽毛球活动文案'
     };
   }
 });

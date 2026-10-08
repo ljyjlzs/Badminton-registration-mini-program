@@ -6,6 +6,8 @@
 const cloud = require('wx-server-sdk');
 
 const logger = require('./logger');
+// ENG-11: 默认等级常量（由 sync-shared.js 复制）
+const { DEFAULT_LEVEL } = require('./constants.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const db = cloud.database();
@@ -43,7 +45,7 @@ exports.main = async (event) => {
     (usersRes.data || []).forEach(u => { umap[u.openid] = u; });
     const toMember = (uid) => {
       const u = umap[uid] || {};
-      return { userId: uid, nickname: u.nickname || '球友', avatar: u.avatar || '', level: u.level || 5 };
+      return { userId: uid, nickname: u.nickname || '球友', avatar: u.avatar || '', level: u.level || DEFAULT_LEVEL };
     };
     const team1 = { id: t1._id, name: t1.name, members: (t1.members || []).map(toMember) };
     const team2 = { id: t2._id, name: t2.name, members: (t2.members || []).map(toMember) };

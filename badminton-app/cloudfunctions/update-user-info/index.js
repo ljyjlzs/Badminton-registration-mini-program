@@ -5,6 +5,8 @@
 const cloud = require('wx-server-sdk');
 
 const logger = require('./logger');
+// ENG-11: 默认等级常量（由 sync-shared.js 复制）
+const { DEFAULT_LEVEL } = require('./constants.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const db = cloud.database();
@@ -30,7 +32,7 @@ exports.main = async (event, context) => {
             openid: openid,
             nickname: nickname ? nickname.trim() : '',
             avatar: avatar || '',
-            level: 5,
+            level: DEFAULT_LEVEL,
             rating: 1000,
             createdAt: db.serverDate(),
             updatedAt: db.serverDate()

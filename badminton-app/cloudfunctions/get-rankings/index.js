@@ -6,6 +6,8 @@
 const cloud = require('wx-server-sdk');
 const logger = require('./logger');
 const { ratingOfLevel } = require('./rating.js');
+// ENG-11: 默认等级常量（由 sync-shared.js 复制）
+const { DEFAULT_LEVEL } = require('./constants.js');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
@@ -19,21 +21,32 @@ exports.main = async (event, context) => {
     const { activityId } = payload;
     if (!activityId) return { success: false, message: 'activityId 不能为空' };
 
-    // 云数据库单次 get 默认最多返回 100 条，显式 limit(1000) 避免静默截断
-    const scoresRes = await db.collection('scores').where({ activityId }).limit(1000).get();
-    const rcRes = await db.collection('rating_changes').where({ activityId }).limit(1000).get();
-    const regsRes = await db.collection('registrations').where({ activityId, applyStatus: 'active', cancelStatus: _.neq('approved') }).limit(1000).get();
-    const teamsRes = await db.collection('teams').where({ activityId }).limit(1000).get();
-    const usersRes = await db.collection('users').where({ openid: _.in((regsRes.data || []).map(r => r.userId)) }).limit(1000).get();
+    // BUG-7: 分页循环取全量，避免 limit(1000) 仍可能静默截断
+    async function getAll(coll, where) {
+      let rows = [], skip = 0;
+      const PAGE_SIZE = 100;
+      while (true) {
+        const res = await coll.where(where).skip(skip).limit(PAGE_SIZE).get();
+        const data = res.data || [];
+        rows = rows.concat(data);
+        if (data.length < PAGE_SIZE) break;
+        skip += PAGE_SIZE;
+      }
+      return rows;
+    }
+
+    const scores = await getAll(db.collection('scores'), { activityId });
+    const rcs = await getAll(db.collection('rating_changes'), { activityId });
+    const regs = await getAll(db.collection('registrations'), { activityId, applyStatus: 'active', cancelStatus: _.neq('approved') });
+    const teams = await getAll(db.collection('teams'), { activityId });
+    const users = await getAll(db.collection('users'), { openid: _.in(regs.map(r => r.userId)) });
 
     const umap = {};
-    (usersRes.data || []).forEach(u => { umap[u.openid] = u; });
-    const scores = scoresRes.data || [];
-    const rcs = rcRes.data || [];
+    users.forEach(u => { umap[u.openid] = u; });
 
     // 个人
     const indiv = {};
-    (regsRes.data || []).forEach(r => {
+    regs.forEach(r => {
       indiv[r.userId] = {
         userId: r.userId,
         nickname: r.nickname,
@@ -73,11 +86,11 @@ exports.main = async (event, context) => {
 
     // 队伍
     const teamMap = {};
-    (teamsRes.data || []).forEach(t => { teamMap[t._id] = t; });
+    teams.forEach(t => { teamMap[t._id] = t; });
     const teamAgg = {};
     Object.values(indiv).forEach(p => {
       // 找到包含该用户的队伍
-      const team = (teamsRes.data || []).find(t => (t.members || []).includes(p.userId));
+      const team = teams.find(t => (t.members || []).includes(p.userId));
       if (!team) return;
       if (!teamAgg[team._id]) {
         teamAgg[team._id] = { teamId: team._id, name: team.name, members: team.members, totalScore: 0 };
@@ -90,11 +103,11 @@ exports.main = async (event, context) => {
     // 映射团队成员 openid → nickname
     const allMemberIds = [...new Set(teamRankings.flatMap(t => t.members || []))];
     if (allMemberIds.length > 0) {
-      const memberRes = await db.collection('users').where({ openid: _.in(allMemberIds) }).limit(1000).get();
+      const memberList = await getAll(db.collection('users'), { openid: _.in(allMemberIds) });
       const memberMap = {};
-      (memberRes.data || []).forEach(u => { memberMap[u.openid] = { userId: u.openid, nickname: u.nickname || '未知', avatar: u.avatar || '', level: u.level || 5 }; });
+      memberList.forEach(u => { memberMap[u.openid] = { userId: u.openid, nickname: u.nickname || '未知', avatar: u.avatar || '', level: u.level || DEFAULT_LEVEL }; });
       teamRankings.forEach(t => {
-        t.members = (t.members || []).map(uid => memberMap[uid] || { userId: uid, nickname: '未知', avatar: '', level: 5 });
+        t.members = (t.members || []).map(uid => memberMap[uid] || { userId: uid, nickname: '未知', avatar: '', level: DEFAULT_LEVEL });
       });
     }
 

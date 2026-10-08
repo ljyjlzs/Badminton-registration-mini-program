@@ -11,6 +11,7 @@ Page({
   data: {
     activityId: '',
     loading: true,
+    loadError: false,
     status: 'none',
     report: null,
     badges: [],
@@ -26,7 +27,7 @@ Page({
 
   loadReport: function() {
     var that = this;
-    that.setData({ loading: true });
+    that.setData({ loading: true, loadError: false });
 
     callFunction('get-activity-report', 'get', { activityId: that.data.activityId })
       .then(function(res) {
@@ -43,8 +44,14 @@ Page({
         }
       })
       .catch(function() {
-        that.setData({ loading: false, status: 'failed' });
+        // BUG-46: 加载失败置 loadError，展示可重试错误态
+        that.setData({ loading: false, status: 'failed', loadError: true });
       });
+  },
+
+  // BUG-46: 加载失败后重新加载
+  retryLoad: function() {
+    this.loadReport();
   },
 
   regenerateReport: function() {
@@ -90,6 +97,13 @@ Page({
     return {
       title: '羽毛球活动报告',
       path: '/pages/activity-report/activity-report?activityId=' + (this.data.activityId || '')
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: '羽毛球活动报告',
+      query: 'activityId=' + (this.data.activityId || '')
     };
   }
 });

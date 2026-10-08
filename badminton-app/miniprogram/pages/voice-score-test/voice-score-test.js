@@ -7,7 +7,8 @@ Page({
     audioFile: '',
    textInput: '',
     result: null,
-    submitting: false
+    submitting: false,
+    loadError: false
   },
 
   onLoad(options) {
@@ -53,7 +54,7 @@ Page({
     const tempFilePath = this.data.audioFile;
     if (!tempFilePath) return wx.showToast({ title: '请先录音', icon: 'none' });
     try {
-      this.setData({ submitting: true });
+      this.setData({ submitting: true, loadError: false });
       wx.showLoading({ title: '识别中...' });
       const cloudPath = 'voice_scores/' + Date.now() + '.mp3';
       const up = await wx.cloud.uploadFile({ cloudPath, filePath: tempFilePath });
@@ -84,6 +85,8 @@ Page({
       }
     } catch (e) {
       wx.showToast({ title: e.message || '语音识别失败', icon: 'none' });
+      // BUG-46: 识别失败展示可重试错误态
+      this.setData({ loadError: true });
     } finally {
       wx.hideLoading();
       this.setData({ submitting: false });
@@ -94,6 +97,7 @@ Page({
     const text = this.data.textInput.trim();
     if (!text) return wx.showToast({ title: '请输入比分文字', icon: 'none' });
     try {
+      this.setData({ loadError: false });
       const data = await callFunction('voice-score-parse', 'parse', { text });
       const d = (data && data.data) || data || {};
       // AI-31: result 为结构化对象；兼容旧 scores 数组
@@ -112,6 +116,17 @@ Page({
       }
     } catch (e) {
       wx.showToast({ title: e.message, icon: 'none' });
+      // BUG-46: 识别失败展示可重试错误态
+      this.setData({ loadError: true });
+    }
+  },
+
+  // BUG-46: 按当前输入形态重试识别（有录音走 ASR，否则走文本解析）
+  retryLoad() {
+    if (this.data.audioFile) {
+      this.parseAudio();
+    } else if (this.data.textInput.trim()) {
+      this.parseText();
     }
   },
 
@@ -135,5 +150,19 @@ Page({
     } finally {
       this.setData({ submitting: false });
     }
+  },
+
+  onShareAppMessage() {
+    return {
+      title: '语音计分',
+      path: '/pages/voice-score-test/voice-score-test?activityId=' + (this.activityId || '') + '&matchId=' + (this.matchId || '')
+    };
+  },
+
+  onShareTimeline() {
+    return {
+      title: '语音计分',
+      query: 'activityId=' + (this.activityId || '') + '&matchId=' + (this.matchId || '')
+    };
   }
 });

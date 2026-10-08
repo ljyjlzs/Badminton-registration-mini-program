@@ -19,15 +19,15 @@ exports.main = async function(event) {
       if (!actRes.data) return { success: false, message: '活动不存在' };
       var activity = actRes.data;
 
-      // BUG-7: 分页循环取全量，避免默认 20 条上限截断
+      // BUG-7: 分页循环取全量，每页 .limit(1000)（单次 get 上限），避免默认 20 条上限截断
       async function getAll(coll, where) {
-        var rows = [], skip = 0, PAGE = 100;
+        var rows = [], skip = 0;
         while (true) {
-          var res = await coll.where(where).skip(skip).limit(PAGE).get();
+          var res = await coll.where(where).skip(skip).limit(1000).get();
           var data = res.data || [];
           rows = rows.concat(data);
-          if (data.length < PAGE) break;
-          skip += PAGE;
+          if (data.length < 1000) break;
+          skip += 1000;
         }
         return rows;
       }

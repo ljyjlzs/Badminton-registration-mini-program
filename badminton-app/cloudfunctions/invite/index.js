@@ -9,6 +9,9 @@ const logger = require('./logger');
 const { callAIJson } = require('./ai.js');
 const { rateLimit } = require('./rateLimit.js');
 const { ratingOfLevel } = require('./rating.js');
+// ENG-11: 默认等级常量（由 sync-shared.js 复制）
+const { DEFAULT_LEVEL } = require('./constants.js');
+const { requireArr } = require('./validate.js');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -48,13 +51,13 @@ async function loadCandidates(activityId, openid) {
     const pad = n => String(n).padStart(2, '0');
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
   };
-  const avgLevel = current.data && current.data.length ? current.data.reduce((a, r) => a + (r.level || 5), 0) / current.data.length : 5;
+  const avgLevel = current.data && current.data.length ? current.data.reduce((a, r) => a + (r.level || DEFAULT_LEVEL), 0) / current.data.length : DEFAULT_LEVEL;
   const avgRounded = Math.round(avgLevel);
   const targetRating = ratingOfLevel(avgRounded);
 
   const list = cands.map(id => {
     const u = umap[id] || {};
-    const lvl = u.level || 5;
+    const lvl = u.level || DEFAULT_LEVEL;
     const estRating = u.rating != null ? u.rating : ratingOfLevel(lvl);
     const reasons = ['你上次活动和你一起打过'];
     if (Math.abs(lvl - avgRounded) <= 2 || Math.abs(estRating - targetRating) <= 200) reasons.push('水平接近');
@@ -82,6 +85,11 @@ exports.main = async (event, context) => {
   try {
     // AI-8: 解构并使用 candidateIds（按用户勾选的候选人过滤）
     const { activityId, candidateIds } = payload;
+    // SEC-06: 数组入参长度校验
+    if (candidateIds != null) {
+      const idsCheck = requireArr(candidateIds, 'candidateIds');
+      if (!idsCheck.ok) return { success: false, message: idsCheck.message };
+    }
     const pickSelected = (candidates) => {
       if (!Array.isArray(candidateIds) || candidateIds.length === 0) return candidates;
       const idSet = new Set(candidateIds.map(String));
@@ -100,6 +108,20 @@ exports.main = async (event, context) => {
       const d = new Date(a.time);
       const mdy = (d.getMonth() + 1) + '月' + d.getDate() + '日';
       const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      // AI-8: 日期/剩余人数一致性核对 —— 文案中的日期须与活动日期一致，"还差N人"须与实际剩余名额一致
+      const actMonth = d.getMonth() + 1;
+      const actDay = d.getDate();
+      const isContentConsistent = (text) => {
+        if (!text || typeof text !== 'string') return true;
+        const dateRe = /(\d{1,2})月(\d{1,2})日/g;
+        let dm;
+        while ((dm = dateRe.exec(text)) !== null) {
+          if (Number(dm[1]) !== actMonth || Number(dm[2]) !== actDay) return false;
+        }
+        const rm = /还差\s*(\d+)\s*人/.exec(text);
+        if (rm && Number(rm[1]) !== remaining) return false;
+        return true;
+      };
       let invites;
       let aiUsed = true;
       try {
@@ -110,7 +132,9 @@ exports.main = async (event, context) => {
         invites = (Array.isArray(r.invites) ? r.invites : [])
           .slice(0, 20)
           .map(it => ({ userId: it.userId || null, nickname: it.nickname || null, content: it.content }))
-          .filter(it => it.userId == null || whitelist.has(String(it.userId)));
+          .filter(it => it.userId == null || whitelist.has(String(it.userId)))
+          // AI-8: 过滤日期/剩余人数与活动不一致的条目
+          .filter(it => isContentConsistent(it.content));
         if (invites.length === 0) throw new Error('empty');
       } catch (e) {
     logger.error('invite', (typeof action !== 'undefined' ? action : '-'), { err: e });
@@ -119,6 +143,11 @@ exports.main = async (event, context) => {
           ? candidates.map(c => ({ userId: c.userId, nickname: c.nickname, content: TEMPLATE.replace('{nickname}', c.nickname).replace('{M月d日}', mdy).replace('{HH:mm}', hm).replace('{location}', a.location).replace('{n}', remaining) }))
           : [{ userId: null, nickname: null, content: TEMPLATE.replace('{nickname}', '朋友').replace('{M月d日}', mdy).replace('{HH:mm}', hm).replace('{location}', a.location).replace('{n}', remaining) }];
       }
+      // AI-8: 返回前长度校验（60 字上限，超出截断加省略号）
+      invites = invites.map(item => {
+        if (item.content && item.content.trim().length > 60) { item.content = item.content.trim().slice(0, 60) + '…'; }
+        return item;
+      });
       return { success: true, data: { invites, source: aiUsed ? 'ai' : 'template' }, message: 'ok' };
     }
     return { success: false, message: '未知 action: ' + action };

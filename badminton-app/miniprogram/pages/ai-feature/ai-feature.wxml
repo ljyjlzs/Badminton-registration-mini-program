@@ -1,7 +1,12 @@
 <view class="feature-page">
   <view wx:if="{{loading}}" class="loading">生成中...</view>
 
-  <block wx:if="{{!loading}}">
+  <view wx:if="{{loadError}}" class="load-error">
+    <text>加载失败，请重试</text>
+    <button bindtap="retryLoad">重新加载</button>
+  </view>
+
+  <block wx:if="{{!loading && !loadError}}">
     <view wx:if="{{suggestions.length === 0}}" class="empty">
       <view class="btn-gen" bindtap="generate">生成精选建议</view>
     </view>

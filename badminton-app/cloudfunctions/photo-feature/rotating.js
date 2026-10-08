@@ -3,6 +3,18 @@
  * 基准：court-matches 修复版 keyOf（对象 pair / 成员数组双分支，过滤 dummy）
  * 部署前 node cloudfunctions/sync-shared.js 同步到各函数目录
  */
+
+/**
+ * ARCH-04: 统一场地标签规则，消除 start-grouping/court-start/court-matches 各内联副本的漂移。
+ * 规则统一取 64+n（n=1 对应 '场地A'），与 _shared/validate.js courtLabel 保持一致。
+ * @param {number} n 场地序号（从 1 开始）
+ * @returns {string}
+ */
+function getCourtLabel(n) {
+  if (n <= 26) return '场地' + String.fromCharCode(64 + n);
+  return '场地' + n;
+}
+
 function buildRotatingDoublesPlan(regs, playersMap) {
   if (regs.length < 4) throw new Error('轮转双打至少需要4人');
   const players = regs.map(r => r.userId);
@@ -66,4 +78,4 @@ function buildRotatingDoublesPlan(regs, playersMap) {
   return { teams, matches, reasons, matchesCount: matches.length };
 }
 
-module.exports = { buildRotatingDoublesPlan };
+module.exports = { buildRotatingDoublesPlan, getCourtLabel };

@@ -11,7 +11,12 @@
     </view>
   </view>
 
-  <view wx:if="{{loading}}" class="loading invite-loading">
+  <view wx:if="{{loadError}}" class="load-error">
+    <text>加载失败，请重试</text>
+    <button bindtap="retryLoad">重新加载</button>
+  </view>
+
+  <view wx:elif="{{loading}}" class="loading invite-loading">
     <view class="loading-spinner"></view>
     <text>加载候选球友...</text>
   </view>

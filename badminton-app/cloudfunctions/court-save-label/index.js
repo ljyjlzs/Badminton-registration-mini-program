@@ -5,6 +5,7 @@
 const cloud = require('wx-server-sdk');
 
 const logger = require('./logger');
+const { requireArr } = require('./validate.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const db = cloud.database();
@@ -17,6 +18,9 @@ exports.main = async (event) => {
   try {
     const { activityId, labels } = payload;
     if (!activityId || !Array.isArray(labels)) return { success: false, message: 'activityId/labels 必填' };
+    // SEC-06: 数组入参长度校验
+    const labelsCheck = requireArr(labels, 'labels');
+    if (!labelsCheck.ok) return { success: false, message: labelsCheck.message };
     const act = await db.collection('activities').doc(activityId).get();
     if (!act.data || act.data.organizerId !== openid) return { success: false, message: '仅组织者可编辑' };
 

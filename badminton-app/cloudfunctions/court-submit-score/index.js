@@ -8,6 +8,8 @@ const cloud = require('wx-server-sdk');
 const logger = require('./logger');
 // ARCH-02: 评分引擎参数化，公式统一在 _shared/rating.js（由 sync-shared.js 复制）
 const ratingEngine = require('./rating.js');
+// ENG-11: 比分范围常量（由 sync-shared.js 复制）
+const { SCORE_MIN, SCORE_MAX } = require('./constants.js');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
@@ -25,7 +27,7 @@ exports.main = async (event, context) => {
     const s1 = Number(team1Score != null ? team1Score : scoreA);
     const s2 = Number(team2Score != null ? team2Score : scoreB);
     if (!matchId) return { success: false, message: 'matchId 不能为空' };
-    if (isNaN(s1) || isNaN(s2) || s1 < 0 || s2 < 0 || s1 > 30 || s2 > 30) {
+    if (isNaN(s1) || isNaN(s2) || s1 < SCORE_MIN || s2 < SCORE_MIN || s1 > SCORE_MAX || s2 > SCORE_MAX) {
       return { success: false, message: '比分范围 0-30' };
     }
     if (s1 === s2) return { success: false, message: '不允许平局' };
@@ -74,15 +76,23 @@ exports.main = async (event, context) => {
         userRevert[rc.userId] = (userRevert[rc.userId] || 0) - rc.delta;
       });
       const revertKeys = Object.keys(userRevert);
-      // PERF-14 + COST-04：批量取 users 建 rmap，替代循环内逐个 where
-      const rmap = {};
-      if (revertKeys.length > 0) {
-        const rvRes = await transaction.collection('users').where({ openid: _.in(revertKeys) }).get();
-        (rvRes.data || []).forEach(u => { rmap[u.openid] = u; });
+      // PERF-14：revertKeys 与 m1+m2（rating_changes 写入的同一批 userId）合并为一次 users 查询，结果复用
+      const allUserIds = [];
+      const seenUid = {};
+      const pushUid = uid => {
+        if (uid && !seenUid[uid]) { seenUid[uid] = 1; allUserIds.push(uid); }
+      };
+      revertKeys.forEach(pushUid);
+      m1.forEach(pushUid);
+      m2.forEach(pushUid);
+      const umap = {};
+      if (allUserIds.length > 0) {
+        const usersRes = await transaction.collection('users').where({ openid: _.in(allUserIds) }).get();
+        (usersRes.data || []).forEach(u => { umap[u.openid] = u; });
       }
       for (const uid of revertKeys) {
-        if (rmap[uid] && rmap[uid]._id) {
-          await transaction.collection('users').doc(rmap[uid]._id).update({ data: { rating: _.inc(userRevert[uid]) } });
+        if (umap[uid] && umap[uid]._id) {
+          await transaction.collection('users').doc(umap[uid]._id).update({ data: { rating: _.inc(userRevert[uid]) } });
         }
       }
       await transaction.collection('scores').where({ matchId }).remove();
@@ -97,7 +107,7 @@ exports.main = async (event, context) => {
       }
 
       // 更新 rating（04.1）
-      await applyRating(match.activityId, matchId, m1, m2, s1, s2, transaction);
+      await applyRating(match.activityId, matchId, m1, m2, s1, s2, transaction, umap);
 
       // 更新比赛
       await transaction.collection('matches').doc(matchId).update({
@@ -136,11 +146,7 @@ exports.main = async (event, context) => {
 };
 
 // ARCH-02: 公式收敛到 _shared/rating.js，此处仅转发
-async function applyRating(activityId, matchId, m1, m2, s1, s2, transaction) {
-  const allIds = m1.concat(m2);
-  const coll = transaction ? transaction.collection('users') : db.collection('users');
-  const usersRes = await coll.where({ openid: _.in(allIds) }).get();
-  const umap = {};
-  (usersRes.data || []).forEach(u => { umap[u.openid] = u; });
+// PERF-14: umap 由调用方统一预取并传入，这里不再重复查询 users
+async function applyRating(activityId, matchId, m1, m2, s1, s2, transaction, umap) {
   return ratingEngine.applyRating(transaction || db, activityId, matchId, m1, m2, s1, s2, _, umap);
 }

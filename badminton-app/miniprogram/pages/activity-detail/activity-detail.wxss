@@ -687,6 +687,13 @@
   background: #d58c1b;
 }
 
+/* UX-17: 解绑搭档热区（约 44px，iOS HIG） */
+.unbind-partner-hotzone {
+  padding: 8rpx 16rpx;
+  font-size: 26rpx;
+  min-height: 64rpx;
+}
+
 .registration-item-wrap.has-pending .registration-item {
   background: linear-gradient(135deg, #fffaf1 0%, #fff3df 100%);
   border-color: rgba(213, 140, 27, 0.16);

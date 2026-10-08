@@ -20,7 +20,7 @@ Thumbs.db
 .env.local
 
 # 云函数本地部署配置（含 AI_API_KEY / AMAP_KEY 等敏感环境变量，勿入库）
-# 注意：密钥需轮换，当前明文配置在 badminton-app/cloudfunctions/*/cloudbaserc.json 中
+# 注意：密钥通过 scripts/inject-env.js 外部注入，参见 .env.example
 cloudfunctions/**/cloudbaserc.json
 badminton-app/cloudfunctions/**/cloudbaserc.json
 

@@ -10,7 +10,8 @@ Page({
     isNameMissing: false,
     isTimeMissing: false,
     isLocationMissing: false,
-    creating: false
+    creating: false,
+    loadError: false
   },
 
   // AI-32: 接收 create-activity 跳转带来的 ?input 参数并自动解析
@@ -26,7 +27,7 @@ Page({
   async parseAi() {
     const msg = this.data.aiMessage.trim();
     if (!msg) return wx.showToast({ title: '请输入活动描述', icon: 'none' });
-    this.setData({ parsing: true });
+    this.setData({ parsing: true, loadError: false });
     try {
       const data = await callFunction('parse-activity', 'parse', { message: msg });
       if (!data.success) throw new Error(data.message || 'AI 解析失败');
@@ -50,8 +51,14 @@ Page({
       });
     } catch (e) {
       wx.showToast({ title: e.message, icon: 'none' });
-      this.setData({ parsing: false });
+      // BUG-46: 解析失败展示可重试错误态
+      this.setData({ parsing: false, loadError: true });
     }
+  },
+
+  // BUG-46: 加载失败后重新解析
+  retryLoad() {
+    this.parseAi();
   },
 
   onFormInput(e) {
@@ -98,6 +105,12 @@ Page({
     return {
       title: 'AI 创建羽毛球活动',
       path: '/pages/index/index'
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: 'AI 创建羽毛球活动'
     };
   }
 });

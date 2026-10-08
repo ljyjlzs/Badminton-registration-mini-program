@@ -8,6 +8,7 @@ Page({
     courts: [],
     unassigned: [],
     loading: true,
+    loadError: false,
     configPlayersPerCourt: 4,
     editM: 4,
     showMMask: false,
@@ -45,7 +46,9 @@ Page({
     var silent = (that.data.courts && that.data.courts.length > 0) ||
       (that.data.unassigned && that.data.unassigned.length > 0);
     if (!silent) {
-      that.setData({ loading: true });
+      that.setData({ loading: true, loadError: false });
+    } else {
+      that.setData({ loadError: false });
     }
     callFunction('court-list', 'get', { activityId: that.data.activityId })
       .then(function(data) {
@@ -67,9 +70,15 @@ Page({
       })
       .catch(function(err) {
         console.error('加载场地失败：', err);
-        that.setData({ loading: false });
+        // BUG-46: 加载失败展示可重试错误态
+        that.setData({ loading: false, loadError: true });
         if (done) done();
       });
+  },
+
+  // BUG-46: 加载失败后重新加载
+  retryLoad: function() {
+    this.loadLayout();
   },
 
   onConfigPlayersPerCourtInput: function(e) {
@@ -255,6 +264,13 @@ Page({
     return {
       title: '羽毛球场地分配',
       path: '/pages/court-assign/court-assign?activityId=' + this.data.activityId
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: '羽毛球场地分配',
+      query: 'activityId=' + this.data.activityId
     };
   }
 });

@@ -5,6 +5,8 @@
  */
 var cloud = require('wx-server-sdk');
 const logger = require('./logger');
+// ENG-11: 默认等级常量（由 sync-shared.js 复制）
+const { DEFAULT_LEVEL } = require('./constants.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 var db = cloud.database();
 var _ = db.command;
@@ -151,7 +153,7 @@ exports.main = async function(event) {
         recentMatches: recentMatches,
         rankingTrend: rankingTrend,
         rating: user.rating || 1000,
-        level: user.level || 5,
+        level: user.level || DEFAULT_LEVEL,
         rank: rank,
         aiStyle: buildAiStyle(user, winRate),
         highlights: highlights,
@@ -167,7 +169,7 @@ exports.main = async function(event) {
 
 // 由 rating/level/胜率拼一句中文球风描述
 function buildAiStyle(user, winRate) {
-  var level = user.level || 5;
+  var level = user.level || DEFAULT_LEVEL;
   var rating = user.rating || 1000;
   var style;
   if (winRate >= 60) {

@@ -5,6 +5,7 @@
 const cloud = require('wx-server-sdk');
 
 const logger = require('./logger');
+const { requireArr } = require('./validate.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const db = cloud.database();
@@ -83,6 +84,9 @@ async function saveMatchOrder(payload, openid) {
   if (!matchOrders || !Array.isArray(matchOrders) || matchOrders.length === 0) {
     return { success: false, message: 'matchOrders 不能为空' };
   }
+  // SEC-06: 数组入参长度校验
+  const ordersCheck = requireArr(matchOrders, 'matchOrders');
+  if (!ordersCheck.ok) return { success: false, message: ordersCheck.message };
   
   // 验证是否是组织者
   const actRes = await db.collection('activities').doc(activityId).get();

@@ -14,7 +14,11 @@
       <button class="btn-primary" bindtap="generate" loading="{{generating}}">生成 / 重排赛程</button>
     </view>
 
-    <view wx:if="{{loading}}" class="tip">加载中...</view>
+    <view wx:if="{{loadError}}" class="load-error">
+      <text>加载失败，请重试</text>
+      <button bindtap="retryLoad">重新加载</button>
+    </view>
+    <view wx:elif="{{loading}}" class="tip">加载中...</view>
     <view wx:elif="{{courts.length === 0}}" class="tip">暂无赛程，组织者请先生成</view>
 
     <view wx:for="{{courts}}" wx:key="court" class="court-block">

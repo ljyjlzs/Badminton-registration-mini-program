@@ -1,5 +1,10 @@
 <view class="page-shell fill-page">
-  <view wx:if="{{loading}}" class="loading">
+  <view wx:if="{{loadError}}" class="load-error">
+    <text>加载失败，请重试</text>
+    <button bindtap="retryLoad">重新加载</button>
+  </view>
+
+  <view wx:elif="{{loading}}" class="loading">
     <view class="loading-spinner"></view>
     <text>加载中...</text>
   </view>

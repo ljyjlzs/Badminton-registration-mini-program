@@ -4,6 +4,7 @@ Page({
   data: {
     activityId: '',
     loading: true,
+    loadError: false,
     activityName: '',
     activeCount: 0,
     maxPlayers: 0,
@@ -23,7 +24,7 @@ Page({
 
   loadData: function() {
     var that = this;
-    that.setData({ loading: true });
+    that.setData({ loading: true, loadError: false });
 
     callFunction('get-fill-suggestions', 'suggest', { activityId: that.data.activityId })
       .then(function(data) {
@@ -49,9 +50,15 @@ Page({
       })
       .catch(function(err) {
         console.error('加载补位建议失败：', err);
-        that.setData({ loading: false });
+        // BUG-46: 加载失败展示可重试错误态
+        that.setData({ loading: false, loadError: true });
         wx.showToast({ title: '加载失败', icon: 'none' });
       });
+  },
+
+  // BUG-46: 加载失败后重新加载
+  retryLoad: function() {
+    this.loadData();
   },
 
   copyRecommendation: function(e) {
@@ -64,6 +71,12 @@ Page({
     return {
       title: '羽毛球补位推荐',
       path: '/pages/index/index'
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: '羽毛球补位推荐'
     };
   }
 });

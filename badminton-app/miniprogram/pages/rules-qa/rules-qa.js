@@ -5,6 +5,7 @@ Page({
     messages: [],
     inputText: '',
     loading: false,
+    loadError: false,
     scrollToId: '',
     lastQuestion: '',
     quickQuestions: [
@@ -49,7 +50,7 @@ Page({
   _ask: function(text) {
     var self = this;
     var messages = self.data.messages.concat([{ role: 'user', content: text }]);
-    self.setData({ messages: messages, inputText: '', loading: true, lastQuestion: text });
+    self.setData({ messages: messages, inputText: '', loading: true, loadError: false, lastQuestion: text });
     self._scrollToLast(messages);
 
     callFunction('rules-qa', 'ask', { question: text }).then(function(res) {
@@ -76,15 +77,30 @@ Page({
       self._scrollToLast(newMessages);
     }).catch(function() {
       var newMessages = self.data.messages.concat([{ role: 'assistant', content: '抱歉，服务暂时不可用，请稍后再试。', references: [], isFallback: false, isError: true, question: text }]);
-      self.setData({ messages: newMessages, loading: false });
+      // BUG-46: 提问失败置 loadError，展示可重试错误态
+      self.setData({ messages: newMessages, loading: false, loadError: true });
       self._scrollToLast(newMessages);
     });
+  },
+
+  // BUG-46: 加载失败后用上次问题重新提问
+  retryLoad: function() {
+    if (this.data.loading) return;
+    var question = this.data.lastQuestion;
+    if (!question) return;
+    this._ask(question);
   },
 
   onShareAppMessage: function() {
     return {
       title: '羽毛球规则问答',
       path: '/pages/rules-qa/rules-qa'
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: '羽毛球规则问答'
     };
   }
 });

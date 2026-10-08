@@ -3,6 +3,7 @@ const { callFunction } = require('../../utils/request.js');
 Page({
   data: {
     loading: true,
+    loadError: false,
     activity: null,
     courts: [],
     unassigned: [],
@@ -29,6 +30,7 @@ Page({
       if (!this.data.activity) {
         this.setData({ loading: true });
       }
+      this.setData({ loadError: false });
       const dataRes = await callFunction('court-list', 'get', { activityId: this.activityId });
       const detailRes = await callFunction('get-activity-detail', 'detail', { activityId: this.activityId });
       // AI-48: callFunction 返回信封 { success, data, message }，需解包一层
@@ -44,8 +46,14 @@ Page({
       });
     } catch (e) {
       wx.showToast({ title: e.message, icon: 'none' });
-      this.setData({ loading: false });
+      // BUG-46: 加载失败展示可重试错误态
+      this.setData({ loading: false, loadError: true });
     }
+  },
+
+  // BUG-46: 加载失败后重新加载
+  retryLoad() {
+    this.loadData();
   },
 
   showConfig() {
@@ -152,6 +160,13 @@ Page({
     return {
       title: '羽毛球场地赛',
       path: '/pages/court-list/court-list?activityId=' + this.activityId
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: '羽毛球场地赛',
+      query: 'activityId=' + this.activityId
     };
   }
 });

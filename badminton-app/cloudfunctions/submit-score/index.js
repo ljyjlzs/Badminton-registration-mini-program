@@ -2,6 +2,8 @@ var cloud = require('wx-server-sdk');
 var logger = require('./logger');
 // ARCH-02: 评分引擎参数化，公式统一在 _shared/rating.js（由 sync-shared.js 复制）
 var ratingEngine = require('./rating.js');
+// ENG-11: 比分范围常量（由 sync-shared.js 复制）
+var { SCORE_MIN, SCORE_MAX } = require('./constants.js');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 var db = cloud.database();
@@ -19,7 +21,7 @@ exports.main = async function(event, context) {
     var team2Score = payload.team2Score;
     if (!matchId) return { success: false, message: 'matchId 不能为空' };
     var s1 = Number(team1Score), s2 = Number(team2Score);
-    if (isNaN(s1) || isNaN(s2) || s1 < 0 || s2 < 0 || s1 > 30 || s2 > 30) {
+    if (isNaN(s1) || isNaN(s2) || s1 < SCORE_MIN || s2 < SCORE_MIN || s1 > SCORE_MAX || s2 > SCORE_MAX) {
       return { success: false, message: '比分范围 0-30' };
     }
     if (s1 === s2) return { success: false, message: '不允许平局' };

@@ -1,4 +1,9 @@
 <view class="voice-page">
+  <view wx:if="{{loadError}}" class="load-error">
+    <text>加载失败，请重试</text>
+    <button bindtap="retryLoad">重新加载</button>
+  </view>
+
   <view class="detail-section">
     <text class="section-title">语音录入</text>
     <view class="record-area">

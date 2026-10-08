@@ -5,6 +5,7 @@ Page({
   data: {
     activityId: '',
     loading: true,
+    loadError: false,
     candidates: [],
     selectedIds: [],
     selectedMap: {},
@@ -25,7 +26,7 @@ Page({
 
   loadCandidates: function() {
     var that = this;
-    that.setData({ loading: true });
+    that.setData({ loading: true, loadError: false });
     callFunction('invite-candidates', 'list', { activityId: that.data.activityId, limit: 10 })
       .then(function(res) {
         var data = res.data || res;
@@ -43,8 +44,14 @@ Page({
       })
       .catch(function(err) {
         console.error('加载候选失败：', err);
-        that.setData({ loading: false });
+        // BUG-46: 加载失败展示可重试错误态
+        that.setData({ loading: false, loadError: true });
       });
+  },
+
+  // BUG-46: 加载失败后重新加载
+  retryLoad: function() {
+    this.loadCandidates();
   },
 
   toggleCandidate: function(e) {
@@ -105,5 +112,18 @@ Page({
 
   shareLink: function() {
     wx.showShareMenu({ withShareTicket: true });
+  },
+
+  onShareAppMessage: function() {
+    return {
+      title: '智能邀约',
+      path: '/pages/invite/invite'
+    };
+  },
+
+  onShareTimeline: function() {
+    return {
+      title: '智能邀约'
+    };
   }
 });

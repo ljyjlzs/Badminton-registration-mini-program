@@ -4,7 +4,12 @@
     <text>正在生成分组方案...</text>
   </view>
 
-  <view wx:if="{{!loading}}" class="preview-shell">
+  <view wx:if="{{loadError}}" class="load-error">
+    <text>加载失败，请重试</text>
+    <button bindtap="retryLoad">重新加载</button>
+  </view>
+
+  <view wx:if="{{!loading && !loadError}}" class="preview-shell">
     <view class="preview-hero">
       <view class="hero-copy">
         <view class="hero-badge">AI 分组预览</view>
@@ -53,7 +58,7 @@
     </view>
   </view>
 
-  <view wx:if="{{!loading}}" class="bottom-bar">
+  <view wx:if="{{!loading && !loadError}}" class="bottom-bar">
     <button class="btn-cancel" bindtap="goBack">返回</button>
     <button class="btn-secondary" bindtap="regenerateGrouping" style="margin-left: 12rpx;">重新生成</button>
     <button class="btn-confirm" bindtap="confirmGrouping" disabled="{{confirming || teams.length === 0}}">

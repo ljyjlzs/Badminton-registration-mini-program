@@ -5,7 +5,9 @@
  */
 const cloud = require('wx-server-sdk');
 const logger = require('./logger');
-const { buildRotatingDoublesPlan } = require('./rotating.js');
+const { buildRotatingDoublesPlan, getCourtLabel } = require('./rotating.js');
+// ENG-11: 赛程间隔常量（由 sync-shared.js 复制到本目录）
+const { MATCH_SLOT_MS } = require('./constants.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
@@ -70,10 +72,10 @@ exports.main = async (event) => {
       plan.matches.forEach(m => {
         ro++;
         allMatches.push({
-          activityId, round: 'group', court: court.label || '场地A', roundOrder: ro,
+          activityId, round: 'group', court: court.label || getCourtLabel(court.courtNo), roundOrder: ro,
           team1Id: teamIdMap[m.team1Key], team2Id: teamIdMap[m.team2Key],
           team1Score: null, team2Score: null, status: 'pending',
-          scheduledTime: Date.now() + ro * 15 * 60 * 1000,
+          scheduledTime: Date.now() + ro * MATCH_SLOT_MS,
           createdAt: db.serverDate(), updatedAt: db.serverDate()
         });
       });

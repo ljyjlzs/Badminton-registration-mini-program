@@ -9,6 +9,9 @@ const logger = require('./logger');
 // ARCH-01: 共享 AI 模块（由 sync-shared.js 复制到本目录，必须本地 require）
 const { callAI } = require('./ai.js');
 const { rateLimit } = require('./rateLimit.js');
+const { requireArr } = require('./validate.js');
+// ENG-11: 默认等级常量（由 sync-shared.js 复制）
+const { DEFAULT_LEVEL } = require('./constants.js');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -53,14 +56,16 @@ function sanitizeText(s, maxLen) {
   return t;
 }
 
-// COST-08: 活动列表缓存 TTL（30 秒），云函数实例复用期间避免每次全量查 50 场活动
-const ACT_CACHE_TTL_MS = 30 * 1000;
+// COST-08: 活动列表缓存 TTL（5 分钟），云函数实例复用期间避免每次全量查 50 场活动
+const ACT_CACHE_TTL_MS = 5 * 60 * 1000;
+// COST-08: 模块级变量，云函数实例复用期内命中即免查库
+let actCache = null;
 
 async function getActivitiesList(openid) {
-  // COST-08: 命中缓存（距上次查询不到 30 秒）直接复用
+  // COST-08: 命中缓存（距上次查询不到 5 分钟）直接复用
   const now = Date.now();
-  if (global.__actCache && global.__actCache.data && now - global.__actCache.ts < ACT_CACHE_TTL_MS) {
-    return global.__actCache.data;
+  if (actCache && actCache.data && now - actCache.ts < ACT_CACHE_TTL_MS) {
+    return actCache.data;
   }
   // COST-08: 白名单投影，不拉 openid 进 prompt；organizerId 仅用于反查昵称后丢弃
   const res = await db.collection('activities').where({ status: 'registering' })
@@ -80,8 +85,8 @@ async function getActivitiesList(openid) {
     status: a.status, maxPlayers: a.maxPlayers, currentPlayers: a.currentPlayers,
     organizer: nameMap[a.organizerId] || ''
   }));
-  // COST-08: 写入全局缓存 { data, ts }
-  global.__actCache = { data: data, ts: Date.now() };
+  // COST-08: 写入模块级缓存 { data, ts }
+  actCache = { data: data, ts: Date.now() };
   return data;
 }
 
@@ -103,7 +108,7 @@ exports.main = async (event, context) => {
     const message = String(rawMessage).slice(0, 2000);
 
     const userRes = await db.collection('users').where({ openid }).limit(1).get();
-    const u = (userRes.data && userRes.data[0]) || { nickname: '球友', level: 5 };
+    const u = (userRes.data && userRes.data[0]) || { nickname: '球友', level: DEFAULT_LEVEL };
     const acts = await getActivitiesList(openid);
     // AI-5: 对拼接进 SYSTEM_PROMPT 的活动名/地点/类型/昵称做清洗（不含 organizerId/openid）
     const actLines = acts.map(a => `- 活动ID: ${sanitizeText(a.id, 40)}\n  名称: ${sanitizeText(a.name, 50)}，类型: ${sanitizeText(a.type, 20)}，时间: ${sanitizeText(a.time, 30)}，地点: ${sanitizeText(a.location, 50)}，组织者: ${sanitizeText(a.organizer, 20)}`).join('\n');
@@ -115,6 +120,11 @@ exports.main = async (event, context) => {
       .replace(ACT_LIST_PLACEHOLDER, '【可报名的活动】(' + acts.length + '个)\n' + (actLines || '（暂无）'));
 
     // i=112：取最近对话历史，随本轮消息一起传给 AI
+    // SEC-06: 数组入参长度校验
+    if (payload.history != null) {
+      const historyCheck = requireArr(payload.history, 'history');
+      if (!historyCheck.ok) return { success: false, message: historyCheck.message };
+    }
     const rawHistory = (payload.history && payload.history.length)
       ? payload.history
       : (await db.collection('ai_messages').where(_.or([{ userId: openid }, { user_id: openid }])).limit(50).get()).data || [];
