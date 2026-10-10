@@ -111,13 +111,16 @@ exports.main = async (event, context) => {
     const u = (userRes.data && userRes.data[0]) || { nickname: '球友', level: DEFAULT_LEVEL };
     const acts = await getActivitiesList(openid);
     // AI-5: 对拼接进 SYSTEM_PROMPT 的活动名/地点/类型/昵称做清洗（不含 organizerId/openid）
-    const actLines = acts.map(a => `- 活动ID: ${sanitizeText(a.id, 40)}\n  名称: ${sanitizeText(a.name, 50)}，类型: ${sanitizeText(a.type, 20)}，时间: ${sanitizeText(a.time, 30)}，地点: ${sanitizeText(a.location, 50)}，组织者: ${sanitizeText(a.organizer, 20)}`).join('\n');
+    // COST-08: 只拼最近 10 场进 prompt，避免 50 场全量撑大 SYSTEM_PROMPT
+    const topActs = acts.slice(0, 10);
+    const actLines = topActs.map(a => `- ${sanitizeText(a.id, 40)}|${sanitizeText(a.name, 40)}|${sanitizeText(a.type, 10)}|${sanitizeText(a.time, 20)}|${sanitizeText(a.location, 30)}|${sanitizeText(a.organizer, 16)}`).join('\n');
+    const overflowNote = acts.length > topActs.length ? '\n（仅展示最近 10 场，共 ' + acts.length + ' 场可报名）' : '';
     // i=107：用精确占位块替换，避免贪婪匹配吞掉后面的报名/取消报名操作指令
     const ACT_LIST_PLACEHOLDER = '【可报名的活动】(N个)\n- 活动ID: ...\n  名称: ...，类型: ...，时间: ...，地点: ...，组织者: ...';
     const system = SYSTEM_PROMPT
       .replace('{nickname}', sanitizeText(u.nickname || '球友', 20))
       .replace('{level}', sanitizeText(String(u.level != null ? u.level : 5), 8))
-      .replace(ACT_LIST_PLACEHOLDER, '【可报名的活动】(' + acts.length + '个)\n' + (actLines || '（暂无）'));
+      .replace(ACT_LIST_PLACEHOLDER, '【可报名的活动】(' + acts.length + '个)\n' + (actLines || '（暂无）') + overflowNote);
 
     // i=112：取最近对话历史，随本轮消息一起传给 AI
     // SEC-06: 数组入参长度校验

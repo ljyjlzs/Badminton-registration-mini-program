@@ -3,6 +3,7 @@ const app = getApp();
 const { request } = require('../../utils/request.js');
 // ENG-11: 默认等级常量
 const constants = require('../../utils/constants.js');
+const timeUtil = require('../../utils/time.js');
 
 Page({
   data: {
@@ -507,16 +508,9 @@ Page({
   // ======================================================
   // 格式化时间
   // ======================================================
+  // ENG-04: 时间格式化统一到 utils/time.js
   formatTime: function(timeValue) {
-    if (!timeValue) return '';
-    let ts = timeValue;
-    if (typeof timeValue === 'object' && timeValue.$date) {
-      ts = timeValue.$date;
-    }
-    const d = new Date(ts);
-    const h = d.getHours();
-    const m = String(d.getMinutes()).padStart(2, '0');
-    return h + ':' + m;
+    return timeUtil.formatClock(timeValue, '');
   },
 
   // ======================================================

@@ -71,8 +71,10 @@ exports.main = async (event) => {
           try {
             await cloud.openapi.subscribeMessage.send({
               touser: uid, templateId: tmpl,
-              data: { thing1: { value: act.data.name }, number2: { value: t1 }, number3: { value: t2 } },
-              page: 'pages/match-score/match-score?matchId=' + matchId
+              data: { thing2: { value: String(act.data.name || '羽毛球比赛').slice(0, 20) }, character_string3: { value: String(t1) }, character_string5: { value: String(t2) } },
+              page: 'pages/match-score/match-score?matchId=' + matchId,
+              miniprogram_state: 'formal',
+              lang: 'zh_CN'
             });
             pushed++;
           } catch (e) {

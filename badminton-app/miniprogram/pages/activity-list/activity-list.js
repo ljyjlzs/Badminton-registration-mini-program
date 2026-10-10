@@ -2,6 +2,7 @@
 const app = getApp();
 const { callFunction } = require('../../utils/request.js');
 const shareUtil = require('../../utils/share.js');
+const timeUtil = require('../../utils/time.js');
 
 // 活动类型中文映射
 const TYPE_MAP = {
@@ -354,44 +355,14 @@ Page({
     });
   },
 
+  // ENG-04: 时间解析统一到 utils/time.js
   parseTime: function(timeValue) {
-    if (!timeValue && timeValue !== 0) return null;
-
-    let timestamp = timeValue;
-
-    if (typeof timeValue === 'string') {
-      if (timeValue.includes('T')) {
-        timestamp = new Date(timeValue).getTime();
-      } else if (!isNaN(timeValue)) {
-        timestamp = parseInt(timeValue);
-      } else if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(timeValue)) {
-        timestamp = new Date(timeValue.replace(/-/g, '/')).getTime();
-      } else {
-        return null;
-      }
-    } else if (typeof timeValue === 'object') {
-      if (timeValue.$date) {
-        timestamp = timeValue.$date;
-      } else {
-        return null;
-      }
-    }
-
-    if (!timestamp || isNaN(timestamp)) return null;
-    return timestamp;
+    var ts = timeUtil.parseTime(timeValue);
+    return ts || null;
   },
 
+  // ENG-04: 时间格式化统一到 utils/time.js
   formatTime: function(timeValue) {
-    var timestamp = this.parseTime(timeValue);
-    if (!timestamp) return '待定';
-
-    const date = new Date(timestamp);
-    if (isNaN(date.getTime())) return '待定';
-
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    const hour = date.getHours();
-    const minute = date.getMinutes();
-    return `${month}月${day}日 ${hour}:${minute < 10 ? '0' + minute : minute}`;
+    return timeUtil.formatTime(timeValue, '待定');
   }
 });

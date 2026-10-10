@@ -125,7 +125,9 @@ async function sendUpcomingReminders() {
           touser: uid,
           templateId: tmpl,
           data: buildReminderData(act),
-          page: 'pages/activity-detail/activity-detail?id=' + act._id
+          page: 'pages/activity-detail/activity-detail?id=' + act._id,
+          miniprogram_state: 'formal',
+          lang: 'zh_CN'
         });
         sent++;
       } catch (e) {
@@ -284,7 +286,9 @@ async function sendReminders(payload, openid) {
         touser: uid,
         templateId: tmpl,
         data: buildReminderData(act.data),
-        page: 'pages/activity-detail/activity-detail?id=' + activityId
+        page: 'pages/activity-detail/activity-detail?id=' + activityId,
+        miniprogram_state: 'formal',
+        lang: 'zh_CN'
       });
       sent++;
     } catch (e) {
