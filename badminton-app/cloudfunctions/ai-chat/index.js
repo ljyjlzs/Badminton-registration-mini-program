@@ -30,8 +30,9 @@ const SYSTEM_PROMPT = `你是小羽，一个羽毛球活动助手。你既可以
 【用户信息】昵称：{nickname}，等级：{level}
 
 【可报名的活动】(N个)
-- 活动ID: ...
-  名称: ...，类型: ...，时间: ...，地点: ...
+- ID|名称|类型|时间|地点|组织者
+
+只能使用上面列出的真实活动 ID，禁止编造任何活动、ID、名称、时间或地点。
 
 当用户要求报名时：
 1. 如果用户明确指定了上面某个活动，先输出一句简短说明，然后必须紧跟以下操作卡片（不要用代码块）：
@@ -116,7 +117,8 @@ exports.main = async (event, context) => {
     const actLines = topActs.map(a => `- ${sanitizeText(a.id, 40)}|${sanitizeText(a.name, 40)}|${sanitizeText(a.type, 10)}|${sanitizeText(a.time, 20)}|${sanitizeText(a.location, 30)}|${sanitizeText(a.organizer, 16)}`).join('\n');
     const overflowNote = acts.length > topActs.length ? '\n（仅展示最近 10 场，共 ' + acts.length + ' 场可报名）' : '';
     // i=107：用精确占位块替换，避免贪婪匹配吞掉后面的报名/取消报名操作指令
-    const ACT_LIST_PLACEHOLDER = '【可报名的活动】(N个)\n- 活动ID: ...\n  名称: ...，类型: ...，时间: ...，地点: ...，组织者: ...';
+    // 🔴 占位符必须与 SYSTEM_PROMPT 中的文本逐字符一致，否则 replace 失败 → AI 看到模板示例 → 编造假活动
+    const ACT_LIST_PLACEHOLDER = '【可报名的活动】(N个)\n- ID|名称|类型|时间|地点|组织者';
     const system = SYSTEM_PROMPT
       .replace('{nickname}', sanitizeText(u.nickname || '球友', 20))
       .replace('{level}', sanitizeText(String(u.level != null ? u.level : 5), 8))
